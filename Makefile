@@ -1,10 +1,15 @@
 CXX=g++
 CXXOPTIMIZE= -O2
-CXXFLAGS= -g -Wall -pthread -std=c++11 $(CXXOPTIMIZE)
-USERID=123456789
+CXXFLAGS= -g -Wall -pthread -std=c++17 $(CXXOPTIMIZE)
+USERID=805419480_
 CLASSES=
 
 all: server client
+
+.PHONY: debug
+debug:
+	$(CXX) -DDEBUG -o server $^ $(CXXFLAGS) server.cpp 
+	$(CXX) -DDEBUG -o client $^ $(CXXFLAGS) client.cpp 
 
 server: $(CLASSES)
 	$(CXX) -o $@ $^ $(CXXFLAGS) $@.cpp
