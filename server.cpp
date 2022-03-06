@@ -20,15 +20,13 @@
 
 // Filesystem
 
+
+// Local
+#include "common.h"
+
 // ========================================================================== //
 // DEFINITIONS
 // ========================================================================== //
-
-#ifdef DEBUG
-#define OPT_LOG 1
-#else
-#define OPT_LOG 0
-#endif
 
 #define BUFFER_SIZE 1024
 
@@ -42,38 +40,6 @@ void *get_in_addr(struct sockaddr *sa) {
 // FUNCTIONS
 // ========================================================================== //
 
-bool err(int rc, const char* message, int exit_code = -1) {
-    if (rc < 0) {
-        if (message)
-            fprintf(stderr, "ERROR: %s in server. errno %d: %s\n", message, errno, strerror(errno));
-        else
-            fprintf(stderr, "ERROR: Unspecified error. errno %d: %s\n", errno, strerror(errno));
-        if (exit_code == -1)
-            exit(errno);
-        else
-            exit(exit_code);
-        return false;
-    }
-    return true;
-}
-
-void _exit(const char* message, int exit_code = 1) {
-    if (message)
-        fprintf(stderr, "ERROR: %s.\n", message);
-    else
-        fprintf(stderr, "ERROR: Unspecified error.\n");
-    exit(exit_code);
-}
-
-template <typename... Args>
-void _log(Args&&... args) {
-    if (OPT_LOG) {
-        std::cerr << "SERVER DEBUG: ";
-        (std::cerr << ... << args);
-        std::cerr << std::endl;
-    }
-}
-
 int open_socket(int port) {
     // https://man7.org/linux/man-pages/man3/getaddrinfo.3.html
 
@@ -82,7 +48,7 @@ int open_socket(int port) {
 
     struct addrinfo hints, *server_info, *p;
 
-    int socket_fd;
+    int socket_fd = -1;
     int rc;
 
     // Clear structs

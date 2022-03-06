@@ -8,14 +8,14 @@ all: server client
 
 .PHONY: debug
 debug:
-	$(CXX) -DDEBUG -o server $^ $(CXXFLAGS) server.cpp 
-	$(CXX) -DDEBUG -o client $^ $(CXXFLAGS) client.cpp 
+	$(CXX) -DDEBUG -o server $^ $(CXXFLAGS) common.cpp server.cpp
+	$(CXX) -DDEBUG -o client $^ $(CXXFLAGS) common.cpp client.cpp 
 
 server: $(CLASSES)
-	$(CXX) -o $@ $^ $(CXXFLAGS) $@.cpp
+	$(CXX) -o $@ $^ $(CXXFLAGS) common.cpp $@.cpp
 
 client: $(CLASSES)
-	$(CXX) -o $@ $^ $(CXXFLAGS) $@.cpp
+	$(CXX) -o $@ $^ $(CXXFLAGS) common.cpp $@.cpp
 
 clean:
 	rm -rf *.o *~ *.gch *.swp *.dSYM server client *.tar.gz

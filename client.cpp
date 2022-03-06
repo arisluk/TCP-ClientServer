@@ -22,6 +22,9 @@
 
 // Filesystem
 
+// Local
+#include "common.h"
+
 // ========================================================================== //
 // DEFINITIONS
 // ========================================================================== //
@@ -35,38 +38,6 @@
 // ========================================================================== //
 // FUNCTIONS
 // ========================================================================== //
-
-bool err(int rc, const char* message, int exit_code = -1) {
-    if (rc < 0) {
-        if (message)
-            fprintf(stderr, "ERROR: %s in client. errno %d: %s\n", message, errno, strerror(errno));
-        else
-            fprintf(stderr, "ERROR: Unspecified error. errno %d: %s\n", errno, strerror(errno));
-        if (exit_code == -1)
-            exit(errno);
-        else
-            exit(exit_code);
-        return false;
-    }
-    return true;
-}
-
-void _exit(const char* message, int exit_code = 1) {
-    if (message)
-        fprintf(stderr, "ERROR: %s.\n", message);
-    else
-        fprintf(stderr, "ERROR: Unspecified error.\n");
-    exit(exit_code);
-}
-
-template <typename... Args>
-void _log(Args&&... args) {
-    if (OPT_LOG) {
-        std::cerr << "CLIENT DEBUG: ";
-        (std::cerr << ... << args);
-        std::cerr << std::endl;
-    }
-}
 
 void sig_handle(int sig) {
     if (sig == SIGTERM || sig == SIGQUIT) exit(0);
@@ -141,17 +112,15 @@ int main(int argc, char** argv) {
     }
 
     _log(OPT_HOST, "|", OPT_PORT, "|", OPT_DIR);
-    std::cerr << "client is not implemented yet" << std::endl;
 
     int socket_fd;
     struct addrinfo *p;
     std::tie(socket_fd, p) = open_socket(OPT_HOST.c_str(), OPT_PORT);
 
     int numbytes = 0;
-    numbytes = sendto(socket_fd, argv[3], strlen(argv[3]), 0,
-             p->ai_addr, p->ai_addrlen)) == -1);
+    numbytes = sendto(socket_fd, argv[3], strlen(argv[3]), 0, p->ai_addr, p->ai_addrlen);
     err(numbytes, "Sending message");
-    _log("talker: sent ", numbytes, " bytes to " argv[1]);
+    _log("talker: sent ", numbytes, " bytes to ", argv[1]);
     shutdown(socket_fd, 2);
 
     return 0;
