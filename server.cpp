@@ -20,7 +20,6 @@
 
 // Filesystem
 
-
 // Local
 #include "common.h"
 
@@ -31,9 +30,9 @@
 #define BUFFER_SIZE 1024
 
 void *get_in_addr(struct sockaddr *sa) {
-  return sa->sa_family == AF_INET
-    ? (void *) &(((struct sockaddr_in*)sa)->sin_addr)
-    : (void *) &(((struct sockaddr_in6*)sa)->sin6_addr);
+    return sa->sa_family == AF_INET
+               ? (void *)&(((struct sockaddr_in *)sa)->sin_addr)
+               : (void *)&(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
 // ========================================================================== //
@@ -65,7 +64,7 @@ int open_socket(int port) {
     }
     _log("SOCKET SETUP: getaddrinfo success.\n");
 
-    for(p = server_info; p != NULL; p = p->ai_next) {
+    for (p = server_info; p != NULL; p = p->ai_next) {
         socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (socket_fd == -1) {
             _log("SOCKET BIND: skipped a socket");
@@ -78,7 +77,7 @@ int open_socket(int port) {
             continue;
         }
         break;
-    }   
+    }
 
     if (p == NULL) {
         _log("SOCKET BIND: failed to bind to any socket");
@@ -94,7 +93,7 @@ int open_socket(int port) {
     return socket_fd;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     int OPT_PORT = 0;
     std::string OPT_DIR;
 
@@ -109,7 +108,7 @@ int main(int argc, char** argv) {
         OPT_PORT = std::stoi(argv[1]);
         OPT_DIR  = argv[2];
         if (OPT_PORT < 0 || OPT_PORT > 65535) throw std::invalid_argument("Invalid Port");
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         _log("Invalid arg in ", e.what());
         _exit("Invalid arguments.\nusage: \"./server <PORT> <FILE-DIR>\"");
     }
@@ -119,20 +118,20 @@ int main(int argc, char** argv) {
     int socket_fd;
     socket_fd = open_socket(OPT_PORT);
 
-    
     char buffer[BUFFER_SIZE];
 
     struct sockaddr_storage client_addr;
     socklen_t address_length;
-    
+
     char s[INET6_ADDRSTRLEN];
+
+    int32_t num_connections = 0;
 
     while (true) {
         rc = recvfrom(socket_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &address_length);
         err(rc, "recvfrom socket");
         _log("RECV: Successfully got datagram, length ", rc);
         _log("got packet from ", inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), s, sizeof(s)));
-
     }
 
     shutdown(socket_fd, 2);
