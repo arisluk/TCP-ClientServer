@@ -92,54 +92,67 @@ std::tuple<int, struct addrinfo*> open_socket(const char* hostname, int port) {
 }
 
 int main(int argc, char** argv) {
-    // int OPT_PORT = 0;
-    // std::string OPT_HOST;
-    // std::string OPT_DIR;
+    int OPT_PORT = 0;
+    std::string OPT_HOST;
+    std::string OPT_DIR;
 
-    // if (argc != 4)
-    //     _exit("Invalid arguments.\n usage: \"./client <HOSTNAME-OR-IP> <PORT> <FILENAME>\"");
+    if (argc != 4)
+        _exit("Invalid arguments.\n usage: \"./client <HOSTNAME-OR-IP> <PORT> <FILENAME>\"");
 
-    // _log("Logging enabled.");
+    _log("Logging enabled.");
 
-    // try {
-    //     OPT_HOST = argv[1];
-    //     OPT_PORT = std::stoi(argv[2]);
-    //     OPT_DIR  = argv[3];
-    // } catch (const std::exception& e) {
-    //     std::cerr << "Error in: " << e.what() << std::endl;
-    //     _exit("Invalid arguments.\nusage: \"./server <PORT> <FILE-DIR>\"");
-    // }
+    try {
+        OPT_HOST = argv[1];
+        OPT_PORT = std::stoi(argv[2]);
+        OPT_DIR  = argv[3];
+    } catch (const std::exception& e) {
+        std::cerr << "Error in: " << e.what() << std::endl;
+        _exit("Invalid arguments.\nusage: \"./server <PORT> <FILE-DIR>\"");
+    }
 
-    // _log(OPT_HOST, "|", OPT_PORT, "|", OPT_DIR);
+    _log(OPT_HOST, "|", OPT_PORT, "|", OPT_DIR);
 
-    // int socket_fd;
-    // struct addrinfo* p;
-    // std::tie(socket_fd, p) = open_socket(OPT_HOST.c_str(), OPT_PORT);
+    int socket_fd;
+    struct addrinfo* p;
+    std::tie(socket_fd, p) = open_socket(OPT_HOST.c_str(), OPT_PORT);
 
-    // int numbytes = 0;
-    // numbytes     = sendto(socket_fd, argv[3], strlen(argv[3]), 0, p->ai_addr, p->ai_addrlen);
-    // err(numbytes, "Sending message");
-    // _log("talker: sent ", numbytes, " bytes to ", argv[1]);
-    // shutdown(socket_fd, 2);
+    // udp socket is open and ready to send
+
+
+
+    // example send
+    // just change second and third fields to change data sent
+    int numbytes = 0;
+    numbytes     = sendto(socket_fd, argv[3], strlen(argv[3]), 0, p->ai_addr, p->ai_addrlen);
+    err(numbytes, "Sending message");
+    _log("talker: sent ", numbytes, " bytes to ", argv[1]);
+
+    /*
+
+        client logic here
+    */
+
+
+    shutdown(socket_fd, 2);
+
+    /* example usage of populating header struct:
 
     struct header test_header;
     memset(&test_header, 0, sizeof(test_header));
     _log(sizeof(test_header), " bytes");
 
-    // test_header.sequence_number;
-    // test_header.ack_number;
-    // test_header.connection_id;
-    // test_header.flags;
-
     test_header.sequence_number = htonl(4294967295);
     test_header.ack_number      = htonl(33);
     test_header.connection_id   = htons(19);
 
-    set_flags(test_header.flags, true, false, false);
+    htonl for the uint32s, htons for the uint16s
 
-    for (size_t i = 0; i < sizeof(struct header); i++) {
-        printf("%02X ", ((unsigned char*)&test_header)[i]);
-    }
+    flags dont need host-to-network since its only 8 bits long
+    once we recv on server we need to do the reverse (ntohl, ntohs)
+
+    but for the payload we dont need to do htonl or ntohl since it's byte stream, according to piazza
+
+    */
 
     return 0;
 }

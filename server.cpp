@@ -27,6 +27,7 @@
 // DEFINITIONS
 // ========================================================================== //
 
+// techncially this can be like 524 bc thats the max datagram size i think?
 #define BUFFER_SIZE 1024
 
 void *get_in_addr(struct sockaddr *sa) {
@@ -50,7 +51,7 @@ int open_socket(int port) {
     int socket_fd = -1;
     int rc;
 
-    // Clear structs
+    // clear structs
     bzero(&hints, sizeof(hints));
 
     hints.ai_family   = AF_UNSPEC;   // SUPPORT IPV6
@@ -102,7 +103,8 @@ int main(int argc, char **argv) {
     if (argc != 3)
         _exit("Invalid arguments.\n usage: ./server <PORT> <FILE-DIR>");
 
-    _log("Logging enabled.");
+    // if make debug instead of make
+    _log("Debug logging enabled.");
 
     try {
         OPT_PORT = std::stoi(argv[1]);
@@ -129,7 +131,18 @@ int main(int argc, char **argv) {
 
     while (true) {
         rc = recvfrom(socket_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &address_length);
-        err(rc, "recvfrom socket");
+        err(rc, "while recvfrom socket");
+
+        // succesfully got something
+        num_connections++;
+        /*
+
+
+            server logic here
+
+
+
+        */
         _log("RECV: Successfully got datagram, length ", rc);
         _log("got packet from ", inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), s, sizeof(s)));
     }

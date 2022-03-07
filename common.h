@@ -28,6 +28,15 @@
   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 
+#define SPEC_MAX_PACKET_SIZE 524
+#define SPEC_MAX_PAYLOAD_SIZE 512
+#define SPEC_MAX_SEQ 102400
+#define SPEC_MAX_ACK 102400
+#define SPEC_RTO_MS 500
+#define SPEC_INIT_CWND 512
+#define SPEC_RWND 51200
+#define SPEC_INIT_SS_THRESH 10000
+
 #pragma pack(1)
 struct header {
     uint32_t sequence_number;
@@ -37,15 +46,20 @@ struct header {
     uint8_t flags;
 };
 
-uint16_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN);
+// set header flags given ACK, SYN, FIN
+uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN);
 
+// exit with error if rc < 0, with message and optional exit code
 bool err(int rc, const char* message, int exit_code = -1);
+
+// exit with error message and optional exit code
 void _exit(const char* message, int exit_code = 1);
 
+// log if built with "make debug" instead of plain "make server" or "make client"
 template <typename... Args>
 void _log(Args&&... args) {
     if (OPT_LOG) {
-        std::cerr << "SERVER DEBUG: ";
+        std::cerr << "DEBUG: ";
         (std::cerr << ... << args);
         std::cerr << std::endl;
     }

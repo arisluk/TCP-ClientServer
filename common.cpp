@@ -4,7 +4,7 @@
 #define SYN_MASK 0b00000010
 #define FIN_MASK 0b00000001
 
-uint16_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN) {
+uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN) {
     uint8_t copy = 0;
     flag         = ACK ? flag | ACK_MASK : flag & ~ACK_MASK;
     flag         = SYN ? flag | SYN_MASK : flag & ~SYN_MASK;
