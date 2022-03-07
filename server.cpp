@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <ctime>
 #include <vector>
+#include <dirent.h>
 
 // C libraries
 #include <cerrno>
@@ -45,6 +46,7 @@ void *get_in_addr(struct sockaddr *sa) {
 std::vector<uint16_t> cid_v;
 std::vector<uint32_t> seq_v;
 std::vector<time_t> time_v;
+std::vector<int> writefd_v;
 
 // ========================================================================== //
 // FUNCTIONS
@@ -112,6 +114,10 @@ int open_socket(int port) {
     return socket_fd;
 }
 
+void connection(int socket_fd, int cid) {
+
+}
+
 int main(int argc, char **argv) {
     int OPT_PORT = 0;
     std::string OPT_DIR;
@@ -151,6 +157,7 @@ int main(int argc, char **argv) {
         memset(&buffer, 0, sizeof(struct packet));
         rc = recvfrom(socket_fd, &buffer, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
         err(rc, "while recvfrom socket");
+        _log("RECV: Successfully got datagram, length ", rc);
 
         if (buffer.packet_head.flags > 7) {
             _exit("Not Used in header incorrect");
@@ -160,18 +167,25 @@ int main(int argc, char **argv) {
         printpacket(&buffer);
 
         // succesfully got something
-        num_connections++;
 
         //server logic here
 
         // new connection (incoming SYN)
         if (buffer.packet_head.flags == SYN) {
+            num_connections++;
             time_t curr_time;
             time(&curr_time);
             uint32_t seq_num = 4321; // init seq_num for new connection
             cid_v.push_back(num_connections);
             seq_v.push_back(seq_num);
             time_v.push_back(curr_time);
+
+            char filename[50];
+            snprintf(filename, 49, "%d.file", num_connections);
+            _log("FILENAMNE= ", filename);
+            int write_fd = open(filename, O_CREAT | O_WRONLY, S_IRWXU);
+            _log("WRITEFD = ", write_fd);
+            writefd_v.push_back(write_fd);
             
             packet reply;
             memset(&reply, 0, sizeof(struct packet));
@@ -187,10 +201,52 @@ int main(int argc, char **argv) {
             _log("SENT SYNACK PACKET:");
             printpacket(&reply);
         }
+        else if (buffer.packet_head.flags == FIN) {
+            int cid = buffer.packet_head.connection_id;
+            int vec_idx = cid-1;
+            close(writefd_v.at(vec_idx));
+
+            packet reply;
+            memset(&reply, 0, sizeof(struct packet));
+            seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
+            reply.packet_head.sequence_number = seq_v.at(vec_idx);
+            reply.packet_head.flags = FINACK;
+            reply.packet_head.connection_id = cid;
+            reply.packet_head.ack_number = buffer.packet_head.sequence_number+1;
+
+            int numbytes = 0;
+            numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
+            err(numbytes, "Sending FINACK");
+            _log("talker: sent ", numbytes, " bytes");
+            _log("SENT FINACK PACKET:");
+            printpacket(&reply);
+        }
+        else if (buffer.packet_head.flags == ACK) {
+            continue;
+        }
+        else {
+            int cid = buffer.packet_head.connection_id;
+            int vec_idx = cid-1;
+            int written = write(writefd_v.at(vec_idx), buffer.payload, sizeof(buffer.payload));
+            _log("writte = ", written);
+
+            packet reply;
+            memset(&reply, 0, sizeof(struct packet));
+            seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
+            reply.packet_head.sequence_number = seq_v.at(vec_idx);
+            reply.packet_head.flags = ACK;
+            reply.packet_head.connection_id = cid;
+            reply.packet_head.ack_number = buffer.packet_head.sequence_number + sizeof(buffer.payload); // HOW TO GET PAYLOAD SIZE?
+
+            int numbytes = 0;
+            numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
+            err(numbytes, "Sending ACK");
+            _log("talker: sent ", numbytes, " bytes");
+            _log("SENT ACK PACKET:");
+            printpacket(&reply);
+        }
 
 
-
-        _log("RECV: Successfully got datagram, length ", rc);
         // _log("got packet from ", inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), s, sizeof(s)));
     }
 

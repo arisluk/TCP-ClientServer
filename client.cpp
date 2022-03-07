@@ -200,20 +200,63 @@ int main(int argc, char** argv) {
 
     uint32_t seq_num, ack_num;
     uint16_t cid = 0;
+    bool done = false;
 
     // try handshake
     handshake(socket_fd, p->ai_addr, p->ai_addrlen, &seq_num, &ack_num, &cid);
 
-    packet curr_pack;
-    memset(&curr_pack, 0, sizeof(struct packet));
-
     int file_fd = open(argv[3], O_RDONLY);
-    if (file_fd < 0) {
-        _exit("couldn't open file", 1);
+        if (file_fd < 0) {
+            _exit("couldn't open file", 1);
+        }
+
+    seq_num++;
+
+    while (done == false) {
+        packet curr_pack;
+        memset(&curr_pack, 0, sizeof(struct packet));
+
+        int readLen = read(file_fd, curr_pack.payload, SPEC_MAX_PAYLOAD_SIZE);
+        if (readLen < SPEC_MAX_PAYLOAD_SIZE) {
+            done = true;
+        }
+        curr_pack.packet_head.sequence_number = seq_num;
+        curr_pack.packet_head.ack_number = ack_num;
+        curr_pack.packet_head.connection_id = cid;
+        curr_pack.packet_head.flags = 0;
+
+        int numbytes = 0;
+        numbytes     = sendto(socket_fd, &curr_pack, 12+readLen, 0, p->ai_addr, p->ai_addrlen);
+        err(numbytes, "Sending payload");
+        _log("talker: sent ", numbytes, " bytes");
+        _log("SENT payload PACKET:");
+        printpacket(&curr_pack);
+
+        packet rcv_ack;
+        memset(&rcv_ack, 0, sizeof(struct packet));
+        int rc = 0;
+        rc = recvfrom(socket_fd, &rcv_ack, 12, 0, NULL, 0);
+        err(rc, "while recvfrom socket");
+        _log("RCV ACK PACKET:");
+        printpacket(&rcv_ack);
+
+        seq_num = rcv_ack.packet_head.ack_number;
+        ack_num = rcv_ack.packet_head.sequence_number + 1;
     }
 
-    int readLen = read(file_fd, curr_pack.payload, SPEC_MAX_PAYLOAD_SIZE);
-    curr_pack.packet_head.sequence_number = 64;
+    packet finpack;
+    memset(&finpack, 0, sizeof(struct packet));
+    finpack.packet_head.flags = FIN;
+    finpack.packet_head.connection_id = cid;
+    finpack.packet_head.sequence_number = seq_num;
+    finpack.packet_head.ack_number = 0;
+
+    int numbytes = 0;
+    numbytes     = sendto(socket_fd, &finpack, 12, 0, p->ai_addr, p->ai_addrlen);
+    err(numbytes, "Sending FIN");
+    _log("talker: sent ", numbytes, " bytes");
+    _log("SENT FIN PACKET:");
+    printpacket(&finpack);
 
     // int numbytes = 0;
     // numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);
