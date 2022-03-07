@@ -7,6 +7,10 @@
 #include <string>
 #include <thread>
 #include <tuple>
+#include <fstream>
+#include <unistd.h>
+#include <fcntl.h>
+#include <ctime>
 
 // C libraries
 #include <cerrno>
@@ -35,9 +39,19 @@
 #define OPT_LOG 0
 #endif
 
+using namespace std;
+
 // ========================================================================== //
 // FUNCTIONS
 // ========================================================================== //
+
+void printpacket(struct packet* pack) {
+    _log("seq ", pack->packet_head.sequence_number);
+    _log("ack ", pack->packet_head.ack_number);
+    _log("cid ", pack->packet_head.connection_id);
+    _log("flg ", pack->packet_head.flags);
+    _log("pay ", pack->payload);
+}
 
 void sig_handle(int sig) {
     if (sig == SIGTERM || sig == SIGQUIT) exit(0);
@@ -56,7 +70,7 @@ std::tuple<int, struct addrinfo*> open_socket(const char* hostname, int port) {
     int rc;
 
     // Clear structs
-    bzero(&hints, sizeof(hints));
+    memset(&hints, 0, sizeof(hints));
 
     hints.ai_family   = AF_UNSPEC;   // SUPPORT IPV6
     hints.ai_socktype = SOCK_DGRAM;  // SOCK_STREAM - TCP, SOCK_DGRAM -> UDP
@@ -91,6 +105,58 @@ std::tuple<int, struct addrinfo*> open_socket(const char* hostname, int port) {
     return std::make_tuple(socket_fd, p);
 }
 
+int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* seq_num, uint32_t* ack_num, uint16_t* cid) {
+    *seq_num = 12345;
+    *ack_num = 0;
+
+    packet syn;
+    memset(&syn, 0, sizeof(struct packet));
+    syn.packet_head.sequence_number = *seq_num;
+    syn.packet_head.ack_number = *ack_num;
+    syn.packet_head.connection_id = 0;
+    syn.packet_head.flags = SYN;
+
+    int numbytes = 0;
+    numbytes     = sendto(socket_fd, &syn, 12, 0, addr, size);
+    err(numbytes, "Sending SYN");
+    _log("talker: sent ", numbytes, " bytes");
+    _log("SENT SYN PACKET:");
+    printpacket(&syn);
+
+    packet syn_ack;
+    memset(&syn_ack, 0, sizeof(struct packet));
+    int rc = 0;
+    rc = recvfrom(socket_fd, &syn_ack, 12, 0, NULL, 0);
+    err(rc, "while recvfrom socket");
+
+    if (syn_ack.packet_head.flags != SYNACK)
+    {
+        _exit("BAD SYNACK RECEIVED");
+    }
+
+    *cid = syn_ack.packet_head.connection_id;
+    *seq_num = syn_ack.packet_head.ack_number;
+    *ack_num = syn_ack.packet_head.sequence_number + 1;
+    _log("RCV SYNACK PACKET:");
+    printpacket(&syn_ack);
+
+    packet ack;
+    memset(&ack, 0, sizeof(struct packet));
+    ack.packet_head.sequence_number = *seq_num;
+    ack.packet_head.ack_number = *ack_num;
+    ack.packet_head.connection_id = *cid;
+    ack.packet_head.flags = ACK;
+
+    int numbytes2 = 0;
+    numbytes2     = sendto(socket_fd, &ack, 12, 0, addr, size);
+    err(numbytes2, "Sending handshake ACK");
+    _log("talker: sent ", numbytes, " bytes");
+    _log("SENT ACK PACKET:");
+    printpacket(&ack);
+
+    return 0;
+}
+
 int main(int argc, char** argv) {
     int OPT_PORT = 0;
     std::string OPT_HOST;
@@ -122,15 +188,37 @@ int main(int argc, char** argv) {
 
     // example send
     // just change second and third fields to change data sent
-    int numbytes = 0;
-    numbytes     = sendto(socket_fd, argv[3], strlen(argv[3]), 0, p->ai_addr, p->ai_addrlen);
-    err(numbytes, "Sending message");
-    _log("talker: sent ", numbytes, " bytes to ", argv[1]);
+    // int numbytes = 0;
+    // numbytes     = sendto(socket_fd, argv[3], strlen(argv[3]), 0, p->ai_addr, p->ai_addrlen);
+    // err(numbytes, "Sending message");
+    // _log("talker: sent ", numbytes, " bytes to ", argv[1]);
 
     /*
 
         client logic here
     */
+
+    uint32_t seq_num, ack_num;
+    uint16_t cid = 0;
+
+    // try handshake
+    handshake(socket_fd, p->ai_addr, p->ai_addrlen, &seq_num, &ack_num, &cid);
+
+    packet curr_pack;
+    memset(&curr_pack, 0, sizeof(struct packet));
+
+    int file_fd = open(argv[3], O_RDONLY);
+    if (file_fd < 0) {
+        _exit("couldn't open file", 1);
+    }
+
+    int readLen = read(file_fd, curr_pack.payload, SPEC_MAX_PAYLOAD_SIZE);
+    curr_pack.packet_head.sequence_number = 64;
+
+    // int numbytes = 0;
+    // numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);
+    // err(numbytes, "Sending message");
+    // _log("talker: sent ", numbytes, " bytes to ", argv[1]);
 
 
     shutdown(socket_fd, 2);

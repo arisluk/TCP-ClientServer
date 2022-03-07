@@ -1,19 +1,19 @@
 #include "common.h"
 
-#define ACK_MASK 0b00000100
-#define SYN_MASK 0b00000010
-#define FIN_MASK 0b00000001
+// #define ACK_MASK 0b00000100
+// #define SYN_MASK 0b00000010
+// #define FIN_MASK 0b00000001
 
-uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN) {
-    uint8_t copy = 0;
-    flag         = ACK ? flag | ACK_MASK : flag & ~ACK_MASK;
-    flag         = SYN ? flag | SYN_MASK : flag & ~SYN_MASK;
-    flag         = FIN ? flag | ACK_MASK : flag & ~FIN_MASK;
-    copy         = ACK ? copy | ACK_MASK : copy & ~ACK_MASK;
-    copy         = SYN ? copy | SYN_MASK : copy & ~SYN_MASK;
-    copy         = FIN ? copy | ACK_MASK : copy & ~FIN_MASK;
-    return copy;
-}
+// uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN) {
+//     uint8_t copy = 0;
+//     flag         = ACK ? flag | ACK_MASK : flag & ~ACK_MASK;
+//     flag         = SYN ? flag | SYN_MASK : flag & ~SYN_MASK;
+//     flag         = FIN ? flag | ACK_MASK : flag & ~FIN_MASK;
+//     copy         = ACK ? copy | ACK_MASK : copy & ~ACK_MASK;
+//     copy         = SYN ? copy | SYN_MASK : copy & ~SYN_MASK;
+//     copy         = FIN ? copy | ACK_MASK : copy & ~FIN_MASK;
+//     return copy;
+// }
 
 bool err(int rc, const char* message, int exit_code) {
     if (rc < 0) {

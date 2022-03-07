@@ -37,17 +37,31 @@
 #define SPEC_RWND 51200
 #define SPEC_INIT_SS_THRESH 10000
 
+#define SYN 2 // ...010
+#define ACK 4 // ...100
+#define FIN 1 // ...001
+#define SYNACK 6 // ...110
+#define FINACK 5 // ...101
+
 #pragma pack(1)
 struct header {
     uint32_t sequence_number;
     uint32_t ack_number;
     uint16_t connection_id;
-    uint8_t empty;
-    uint8_t flags;
+    uint16_t flags;
 };
 
+typedef struct header header;
+
+struct packet {
+    header packet_head;
+    char payload[SPEC_MAX_PAYLOAD_SIZE];
+};
+
+typedef struct packet packet;
+
 // set header flags given ACK, SYN, FIN
-uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN);
+// uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN);
 
 // exit with error if rc < 0, with message and optional exit code
 bool err(int rc, const char* message, int exit_code = -1);
