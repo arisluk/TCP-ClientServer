@@ -227,7 +227,7 @@ int main(int argc, char **argv) {
         else {
             int cid = buffer.packet_head.connection_id;
             int vec_idx = cid-1;
-            int written = write(writefd_v.at(vec_idx), buffer.payload, sizeof(buffer.payload));
+            int written = write(writefd_v.at(vec_idx), buffer.payload, rc-12);
             _log("writte = ", written);
 
             packet reply;
@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
             reply.packet_head.sequence_number = seq_v.at(vec_idx);
             reply.packet_head.flags = ACK;
             reply.packet_head.connection_id = cid;
-            reply.packet_head.ack_number = buffer.packet_head.sequence_number + sizeof(buffer.payload); // HOW TO GET PAYLOAD SIZE?
+            reply.packet_head.ack_number = buffer.packet_head.sequence_number + rc-12; // HOW TO GET PAYLOAD SIZE?
 
             int numbytes = 0;
             numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
