@@ -53,14 +53,6 @@ std::queue<int> paysize_q;
 // FUNCTIONS
 // ========================================================================== //
 
-void printpacket(struct packet* pack) {
-    _log("seq ", pack->packet_head.sequence_number);
-    _log("ack ", pack->packet_head.ack_number);
-    _log("cid ", pack->packet_head.connection_id);
-    _log("flg ", pack->packet_head.flags);
-    _log("pay ", pack->payload);
-}
-
 void sig_handle(int sig) {
     if (sig == SIGTERM || sig == SIGQUIT) exit(0);
     exit(sig);
@@ -119,9 +111,9 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
 
     packet syn;
     memset(&syn, 0, sizeof(struct packet));
-    syn.packet_head.sequence_number = *seq_num;
-    syn.packet_head.ack_number = *ack_num;
-    syn.packet_head.connection_id = 0;
+    syn.packet_head.sequence_number = htonl(*seq_num);
+    syn.packet_head.ack_number = htonl(*ack_num);
+    syn.packet_head.connection_id = htons(0);
     syn.packet_head.flags = SYN;
 
     int numbytes = 0;
@@ -142,17 +134,17 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
         _exit("BAD SYNACK RECEIVED");
     }
 
-    *cid = syn_ack.packet_head.connection_id;
-    *seq_num = syn_ack.packet_head.ack_number;
-    *ack_num = syn_ack.packet_head.sequence_number + 1;
+    *cid = ntohs(syn_ack.packet_head.connection_id);
+    *seq_num = ntohl(syn_ack.packet_head.ack_number);
+    *ack_num = ntohl(syn_ack.packet_head.sequence_number) + 1;
     _log("RCV SYNACK PACKET:");
     printpacket(&syn_ack);
 
     packet ack;
     memset(&ack, 0, sizeof(struct packet));
-    ack.packet_head.sequence_number = *seq_num;
-    ack.packet_head.ack_number = *ack_num;
-    ack.packet_head.connection_id = *cid;
+    ack.packet_head.sequence_number = htonl(*seq_num);
+    ack.packet_head.ack_number = htonl(*ack_num);
+    ack.packet_head.connection_id = htons(*cid);
     ack.packet_head.flags = ACK;
 
     int numbytes2 = 0;
@@ -252,9 +244,9 @@ int main(int argc, char** argv) {
             if (readLen < SPEC_MAX_PAYLOAD_SIZE) {
                 done = true;
             }
-            curr_pack.packet_head.sequence_number = seq_num;
-            curr_pack.packet_head.ack_number = ack_num;
-            curr_pack.packet_head.connection_id = cid;
+            curr_pack.packet_head.sequence_number = htonl(seq_num);
+            curr_pack.packet_head.ack_number = htonl(ack_num);
+            curr_pack.packet_head.connection_id = htons(cid);
             curr_pack.packet_head.flags = 0;
 
             int numbytes = 0;
@@ -274,9 +266,9 @@ int main(int argc, char** argv) {
     packet finpack;
     memset(&finpack, 0, sizeof(struct packet));
     finpack.packet_head.flags = FIN;
-    finpack.packet_head.connection_id = cid;
-    finpack.packet_head.sequence_number = seq_num;
-    finpack.packet_head.ack_number = 0;
+    finpack.packet_head.connection_id = htons(cid);
+    finpack.packet_head.sequence_number = htonl(seq_num);
+    finpack.packet_head.ack_number = htonl(0);
 
     int numbytes = 0;
     numbytes     = sendto(socket_fd, &finpack, 12, 0, p->ai_addr, p->ai_addrlen);

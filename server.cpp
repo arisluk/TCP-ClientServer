@@ -52,14 +52,6 @@ std::vector<int> writefd_v;
 // FUNCTIONS
 // ========================================================================== //
 
-void printpacket(struct packet* pack) {
-    _log("seq ", pack->packet_head.sequence_number);
-    _log("ack ", pack->packet_head.ack_number);
-    _log("cid ", pack->packet_head.connection_id);
-    _log("flg ", pack->packet_head.flags);
-    _log("pay ", pack->payload);
-}
-
 int open_socket(int port) {
     // https://man7.org/linux/man-pages/man3/getaddrinfo.3.html
 
@@ -189,9 +181,9 @@ int main(int argc, char **argv) {
             
             packet reply;
             memset(&reply, 0, sizeof(struct packet));
-            reply.packet_head.sequence_number = seq_num;
-            reply.packet_head.ack_number = buffer.packet_head.sequence_number + 1;
-            reply.packet_head.connection_id = num_connections;
+            reply.packet_head.sequence_number = htonl(seq_num);
+            reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number) + 1);
+            reply.packet_head.connection_id = htons(num_connections);
             reply.packet_head.flags = SYNACK;
 
             int numbytes = 0;
@@ -202,17 +194,17 @@ int main(int argc, char **argv) {
             printpacket(&reply);
         }
         else if (buffer.packet_head.flags == FIN) {
-            int cid = buffer.packet_head.connection_id;
+            int cid = ntohs(buffer.packet_head.connection_id);
             int vec_idx = cid-1;
             close(writefd_v.at(vec_idx));
 
             packet reply;
             memset(&reply, 0, sizeof(struct packet));
             seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
-            reply.packet_head.sequence_number = seq_v.at(vec_idx);
+            reply.packet_head.sequence_number = htonl(seq_v.at(vec_idx));
             reply.packet_head.flags = FINACK;
-            reply.packet_head.connection_id = cid;
-            reply.packet_head.ack_number = buffer.packet_head.sequence_number+1;
+            reply.packet_head.connection_id = htons(cid);
+            reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number)+1);
 
             int numbytes = 0;
             numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
@@ -225,7 +217,7 @@ int main(int argc, char **argv) {
             continue;
         }
         else {
-            int cid = buffer.packet_head.connection_id;
+            int cid = ntohs(buffer.packet_head.connection_id);
             int vec_idx = cid-1;
             int written = write(writefd_v.at(vec_idx), buffer.payload, rc-12);
             _log("writte = ", written);
@@ -233,10 +225,10 @@ int main(int argc, char **argv) {
             packet reply;
             memset(&reply, 0, sizeof(struct packet));
             seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
-            reply.packet_head.sequence_number = seq_v.at(vec_idx);
+            reply.packet_head.sequence_number = htonl(seq_v.at(vec_idx));
             reply.packet_head.flags = ACK;
-            reply.packet_head.connection_id = cid;
-            reply.packet_head.ack_number = buffer.packet_head.sequence_number + rc-12; // HOW TO GET PAYLOAD SIZE?
+            reply.packet_head.connection_id = htons(cid);
+            reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number) + rc-12); // HOW TO GET PAYLOAD SIZE?
 
             int numbytes = 0;
             numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);

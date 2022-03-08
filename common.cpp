@@ -37,3 +37,11 @@ void _exit(const char* message, int exit_code) {
         fprintf(stderr, "ERROR: Unspecified error.\n");
     exit(exit_code);
 }
+
+void printpacket(struct packet* pack) {
+    _log("seq ", ntohl(pack->packet_head.sequence_number));
+    _log("ack ", ntohl(pack->packet_head.ack_number));
+    _log("cid ", ntohs(pack->packet_head.connection_id));
+    _log("flg ", pack->packet_head.flags);
+    _log("pay ", pack->payload);
+}

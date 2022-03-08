@@ -49,7 +49,8 @@ struct header {
     uint32_t sequence_number;
     uint32_t ack_number;
     uint16_t connection_id;
-    uint16_t flags;
+    uint8_t empty;
+    uint8_t flags;
 };
 
 typedef struct header header;
@@ -60,6 +61,8 @@ struct packet {
 };
 
 typedef struct packet packet;
+
+void printpacket(struct packet*);
 
 // set header flags given ACK, SYN, FIN
 // uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN);
