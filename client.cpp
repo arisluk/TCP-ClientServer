@@ -171,9 +171,10 @@ int main(int argc, char** argv) {
         OPT_HOST = argv[1];
         OPT_PORT = std::stoi(argv[2]);
         OPT_DIR  = argv[3];
+        if (OPT_PORT < 0 || OPT_PORT > 65535) throw std::invalid_argument("Invalid Port");
     } catch (const std::exception& e) {
         std::cerr << "Error in: " << e.what() << std::endl;
-        _exit("Invalid arguments.\nusage: \"./server <PORT> <FILE-DIR>\"");
+        _exit("Invalid arguments.\nusage: \"./server <PORT> <FILE-DIR>\"", 1);
     }
 
     _log(OPT_HOST, "|", OPT_PORT, "|", OPT_DIR);
