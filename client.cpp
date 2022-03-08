@@ -90,11 +90,13 @@ std::tuple<int, struct addrinfo*> open_socket(const char* hostname, int port) {
 
     hints.ai_family   = AF_UNSPEC;   // SUPPORT IPV6
     hints.ai_socktype = SOCK_DGRAM;  // SOCK_STREAM - TCP, SOCK_DGRAM -> UDP
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_protocol = IPPROTO_UDP;
 
     rc = getaddrinfo(hostname, port_name.c_str(), &hints, &server_info);
     if (rc != 0) {
         _log("SOCKET SETUP: Error getting address info", strerror(errno));
-        _exit("Getting address info.", errno);
+        _exit("Getting address info, maybe incorrect hostname or port?", errno);
     }
     _log("SOCKET SETUP: getaddrinfo success.\n");
 
@@ -135,7 +137,7 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     int numbytes = 0;
     numbytes     = sendto(socket_fd, &syn, 12, 0, addr, size);
     err(numbytes, "Sending SYN");
-    _log("talker: sent ", numbytes, " bytes");
+    _log("handshake syn talker: sent ", numbytes, " bytes");
     _log("SENT SYN PACKET:");
     printpacket(&syn);
     output_packet(&syn, cwnd, ssthresh, TYPE_SEND);
@@ -158,20 +160,20 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     printpacket(&syn_ack);
     output_packet(&syn_ack, cwnd, ssthresh, TYPE_RECV);
 
-    packet ack;
-    memset(&ack, 0, sizeof(struct packet));
-    ack.packet_head.sequence_number = htonl(*seq_num);
-    ack.packet_head.ack_number      = htonl(*ack_num);
-    ack.packet_head.connection_id   = htons(*cid);
-    ack.packet_head.flags           = ACK;
+    // packet ack;
+    // memset(&ack, 0, sizeof(struct packet));
+    // ack.packet_head.sequence_number = htonl(*seq_num);
+    // ack.packet_head.ack_number      = htonl(*ack_num);
+    // ack.packet_head.connection_id   = htons(*cid);
+    // ack.packet_head.flags           = ACK;
 
-    int numbytes2 = 0;
-    numbytes2     = sendto(socket_fd, &ack, 12, 0, addr, size);
-    err(numbytes2, "Sending handshake ACK");
-    _log("talker: sent ", numbytes, " bytes");
-    _log("SENT ACK PACKET:");
-    printpacket(&ack);
-    output_packet(&ack, cwnd, ssthresh, TYPE_SEND);
+    // int numbytes2 = 0;
+    // numbytes2     = sendto(socket_fd, &ack, 12, 0, addr, size);
+    // err(numbytes2, "Sending handshake ACK");
+    // _log("talker: sent ", numbytes, " bytes");
+    // _log("SENT ACK PACKET:");
+    // printpacket(&ack);
+    // output_packet(&ack, cwnd, ssthresh, TYPE_SEND);
 
     return 0;
 }
@@ -238,7 +240,7 @@ int main(int argc, char** argv) {
     int file_fd = open(argv[3], O_RDONLY);
     err(file_fd, "Opening file");
 
-    seq_num++;
+    seq_num = seq_num;
 
     struct timeval socket_timeout;
     socket_timeout.tv_sec  = 0;
@@ -266,8 +268,8 @@ int main(int argc, char** argv) {
                 }
                 _log("RCV ACK PACKET:");
                 printpacket(&rcv_ack);
-                update_cwnd_ssthresh();
                 output_packet(&rcv_ack, cwnd, ssthresh, TYPE_RECV);
+                update_cwnd_ssthresh();
             }
             if (cwnd_q.size() == 0 && done) {
                 truedone = true;
@@ -285,12 +287,12 @@ int main(int argc, char** argv) {
             curr_pack.packet_head.sequence_number = htonl(seq_num);
             curr_pack.packet_head.ack_number      = htonl(ack_num);
             curr_pack.packet_head.connection_id   = htons(cid);
-            curr_pack.packet_head.flags           = 0;
+            curr_pack.packet_head.flags           = ACK;
 
             int numbytes = 0;
             numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);
             err(numbytes, "Sending payload");
-            _log("talker: sent ", numbytes, " bytes");
+            _log("amt_sent talker: sent ", numbytes, " bytes");
             _log("SENT payload PACKET:");
             printpacket(&curr_pack);
             output_packet(&curr_pack, cwnd, ssthresh, TYPE_SEND);
@@ -313,7 +315,7 @@ int main(int argc, char** argv) {
     int numbytes = 0;
     numbytes     = sendto(socket_fd, &finpack, 12, 0, p->ai_addr, p->ai_addrlen);
     err(numbytes, "Sending FIN");
-    _log("talker: sent ", numbytes, " bytes");
+    _log("fin talker: sent ", numbytes, " bytes");
     _log("SENT FIN PACKET:");
     printpacket(&finpack);
     output_packet(&finpack, cwnd, ssthresh, TYPE_SEND);
@@ -327,31 +329,7 @@ int main(int argc, char** argv) {
     printpacket(&finack);
     output_packet(&finack, cwnd, ssthresh, TYPE_RECV);
 
-    // int numbytes = 0;
-    // numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);
-    // err(numbytes, "Sending message");
-    // _log("talker: sent ", numbytes, " bytes to ", argv[1]);
-
     shutdown(socket_fd, 2);
-
-    /* example usage of populating header struct:
-
-    struct header test_header;
-    memset(&test_header, 0, sizeof(test_header));
-    _log(sizeof(test_header), " bytes");
-
-    test_header.sequence_number = htonl(4294967295);
-    test_header.ack_number      = htonl(33);
-    test_header.connection_id   = htons(19);
-
-    htonl for the uint32s, htons for the uint16s
-
-    flags dont need host-to-network since its only 8 bits long
-    once we recv on server we need to do the reverse (ntohl, ntohs)
-
-    but for the payload we dont need to do htonl or ntohl since it's byte stream, according to piazza
-
-    */
 
     return 0;
 }

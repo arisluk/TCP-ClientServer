@@ -209,11 +209,11 @@ int main(int argc, char **argv) {
 
             packet reply;
             memset(&reply, 0, sizeof(struct packet));
-            seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
+            // seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
             reply.packet_head.sequence_number = htonl(seq_v.at(vec_idx));
-            reply.packet_head.flags = ACK;
+            reply.packet_head.flags = FINACK;
             reply.packet_head.connection_id = htons(cid);
-            reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number)+1);
+            reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number) + 1);
 
             int numbytes = 0;
             numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
@@ -223,9 +223,9 @@ int main(int argc, char **argv) {
             printpacket(&reply);
             output_packet_server(&reply, TYPE_SEND);
         }
-        else if (buffer.packet_head.flags == ACK) {
-            continue;
-        }
+        // else if (buffer.packet_head.flags == ACK) {
+        //     continue;
+        // }
         else {
             int cid = ntohs(buffer.packet_head.connection_id);
             int vec_idx = cid-1;
