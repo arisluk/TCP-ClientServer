@@ -157,6 +157,7 @@ int main(int argc, char **argv) {
 
         _log("RECEIVED PACKET:");
         printpacket(&buffer);
+        output_packet_server(&buffer, TYPE_RECV);
 
         // succesfully got something
 
@@ -192,6 +193,7 @@ int main(int argc, char **argv) {
             _log("talker: sent ", numbytes, " bytes");
             _log("SENT SYNACK PACKET:");
             printpacket(&reply);
+            output_packet_server(&reply, TYPE_SEND);
         }
         else if (buffer.packet_head.flags == FIN) {
             int cid = ntohs(buffer.packet_head.connection_id);

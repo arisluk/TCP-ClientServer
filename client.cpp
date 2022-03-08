@@ -46,6 +46,9 @@ using namespace std;
 std::queue<uint32_t> cwnd_q;
 std::queue<int> paysize_q;
 
+int cwnd = SPEC_INIT_CWND;
+int ssthresh = SPEC_INIT_SS_THRESH;
+
 // fd_set rdfs;
 // FD_ZERO(&rdfs);
 
@@ -122,6 +125,7 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     _log("talker: sent ", numbytes, " bytes");
     _log("SENT SYN PACKET:");
     printpacket(&syn);
+    output_packet(&syn, cwnd, ssthresh, TYPE_SEND);
 
     packet syn_ack;
     memset(&syn_ack, 0, sizeof(struct packet));
@@ -139,6 +143,7 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     *ack_num = ntohl(syn_ack.packet_head.sequence_number) + 1;
     _log("RCV SYNACK PACKET:");
     printpacket(&syn_ack);
+    output_packet(&syn, cwnd, ssthresh, TYPE_RECV);
 
     packet ack;
     memset(&ack, 0, sizeof(struct packet));
@@ -203,8 +208,6 @@ int main(int argc, char** argv) {
     uint32_t ack_num = 0;
     uint16_t cid = 0;
     int amt_sent = 0;
-    int cwnd = SPEC_INIT_CWND;
-    int ssthresh = SPEC_INIT_SS_THRESH;
     bool done = false;
 
     // try handshake
@@ -229,6 +232,8 @@ int main(int argc, char** argv) {
             err(rc, "while recvfrom socket");
             _log("RCV ACK PACKET:");
             printpacket(&rcv_ack);
+
+            output_packet(&rcv_ack, cwnd, ssthresh, TYPE_RECV);
         }
 
         if (rc > 0) {
@@ -256,7 +261,7 @@ int main(int argc, char** argv) {
             _log("talker: sent ", numbytes, " bytes");
             _log("SENT payload PACKET:");
             printpacket(&curr_pack);
-
+            output_packet(&curr_pack, cwnd, ssthresh, TYPE_SEND);
             seq_num += readLen;
             cwnd_q.push(seq_num);
             paysize_q.push(readLen);

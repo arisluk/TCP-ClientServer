@@ -44,6 +44,11 @@
 #define SYNACK 6 // ...110
 #define FINACK 5 // ...101
 
+#define TYPE_RECV 1
+#define TYPE_SEND 2
+#define TYPE_DUP 3
+#define TYPE_DROP 4
+
 #pragma pack(1)
 struct header {
     uint32_t sequence_number;
@@ -63,6 +68,10 @@ struct packet {
 typedef struct packet packet;
 
 void printpacket(struct packet*);
+
+void output_packet(struct packet*, int cwnd, int ss_thresh, int type);
+
+void output_packet_server(struct packet*, int type);
 
 // set header flags given ACK, SYN, FIN
 // uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN);
