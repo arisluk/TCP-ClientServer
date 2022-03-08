@@ -334,8 +334,6 @@ int main(int argc, char** argv) {
     printpacket(&finack);
     output_packet(&finack, cwnd, ssthresh, TYPE_RECV);
 
-    bool waiting = true;
-
     packet leftover_fin;
     memset(&leftover_fin, 0, sizeof(struct packet));
 
@@ -348,20 +346,21 @@ int main(int argc, char** argv) {
     seq_num++;
     int newrc = 0;
 
-    while (waiting) {
+    while (true) {
         gettimeofday(&waiting_room, NULL);
         curr_time = 1000000 * waiting_room.tv_sec + waiting_room.tv_usec;
         uint32_t time_diff = 2000000 - (curr_time - start_time);
-        if (time_diff > 2000000) {
-            waiting = false;
+        if ((curr_time-start_time) > 2000000) {
+            break;
         }
         waiting_room2.tv_sec = time_diff/1000000;
         waiting_room2.tv_usec = time_diff%1000000;
 
         memset(&leftover_fin, 0, sizeof(struct packet));
+        _log("TIME DIFF", time_diff);
         setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &waiting_room2, sizeof(waiting_room2));
         newrc = recvfrom(socket_fd, &leftover_fin, 12, 0, NULL, 0);
-        err(newrc, "WAITING ROOM while recvfrom socket");
+        // err(newrc, "WAITING ROOM while recvfrom socket");
         _log("RCV LEFTOVER FIN PACKET:");
         printpacket(&leftover_fin);
         if (newrc > 0 && leftover_fin.packet_head.flags == FIN) {

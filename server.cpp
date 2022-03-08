@@ -148,9 +148,9 @@ int main(int argc, char **argv) {
 
     uint16_t num_connections = 0;
 
-    bool tester = true;
+    // bool tester = true;
 
-    while (tester) {
+    while (true) {
         memset(&buffer, 0, sizeof(struct packet));
         rc = recvfrom(socket_fd, &buffer, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
         err(rc, "SERVER: while recvfrom socket (server)");
@@ -225,7 +225,7 @@ int main(int argc, char **argv) {
             printpacket(&reply);
             output_packet_server(&reply, TYPE_SEND);
 
-            tester = false;
+            // tester = false;
         }
         // else if (buffer.packet_head.flags == ACK) {
         //     continue;
@@ -256,6 +256,34 @@ int main(int argc, char **argv) {
 
         // _log("got packet from ", inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), s, sizeof(s)));
     }
+
+    // TESTING PART DELETE AFTER
+            // packet test;
+            // memset(&test, 0, sizeof(struct packet));
+            // test.packet_head.sequence_number = htonl(4324);
+            // test.packet_head.flags = FIN;
+            // test.packet_head.connection_id = htons(1);
+            // test.packet_head.ack_number = htonl(0);
+            // int nnumbytes = 0;
+            // nnumbytes     = sendto(socket_fd, &test, 12, 0, (struct sockaddr *)&client_addr, address_length);
+            // err(nnumbytes, "Sending test");
+            // _log("test: sent ", nnumbytes, " bytes");
+            // _log("SENT test PACKET:");
+            // printpacket(&test);
+            // output_packet_server(&test, TYPE_SEND);
+            // nnumbytes     = sendto(socket_fd, &test, 12, 0, (struct sockaddr *)&client_addr, address_length);
+            // err(nnumbytes, "Sending test");
+            // _log("test: sent ", nnumbytes, " bytes");
+            // _log("SENT test PACKET:");
+            // printpacket(&test);
+            // output_packet_server(&test, TYPE_SEND);
+            // nnumbytes     = sendto(socket_fd, &test, 12, 0, (struct sockaddr *)&client_addr, address_length);
+            // err(nnumbytes, "Sending test");
+            // _log("test: sent ", nnumbytes, " bytes");
+            // _log("SENT test PACKET:");
+            // printpacket(&test);
+            // output_packet_server(&test, TYPE_SEND);
+            // END OF TESTING
 
     shutdown(socket_fd, 2);
     _log("SHUTDOWN: Closing socket fd");
