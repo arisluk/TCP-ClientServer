@@ -39,11 +39,13 @@ void _exit(const char* message, int exit_code) {
 }
 
 void printpacket(struct packet* pack) {
+    _log("============================");
     _log("seq ", ntohl(pack->packet_head.sequence_number));
     _log("ack ", ntohl(pack->packet_head.ack_number));
     _log("cid ", ntohs(pack->packet_head.connection_id));
     _log("flg ", pack->packet_head.flags);
     _log("pay ", pack->payload);
+    _log("============================");
 }
 
 
@@ -60,6 +62,8 @@ void output_packet(struct packet* pack, int cwnd, int ss_thresh, int type) {
         if (pack->packet_head.flags == ACK) std::cout << "ACK";
         if (pack->packet_head.flags == SYN) std::cout << "SYN";
         if (pack->packet_head.flags == FIN) std::cout << "FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << "SYN ACK";
+        if (pack->packet_head.flags == FINACK) std::cout << "FIN ACK";
         std::cout << std::endl;
     } else if (type == 2) {
         // "SEND" <Sequence Number> <Acknowledgement Number> <Connection ID> <CWND> <SS-THRESH> ["ACK"] ["SYN"] ["FIN"] ["DUP"]
@@ -73,6 +77,8 @@ void output_packet(struct packet* pack, int cwnd, int ss_thresh, int type) {
         if (pack->packet_head.flags == ACK) std::cout << "ACK";
         if (pack->packet_head.flags == SYN) std::cout << "SYN";
         if (pack->packet_head.flags == FIN) std::cout << "FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << "SYN ACK";
+        if (pack->packet_head.flags == FINACK) std::cout << "FIN ACK";
         std::cout << std::endl;
     } else if (type == 3) {
         std::cout << "SEND ";
@@ -84,6 +90,8 @@ void output_packet(struct packet* pack, int cwnd, int ss_thresh, int type) {
         if (pack->packet_head.flags == ACK) std::cout << "ACK ";
         if (pack->packet_head.flags == SYN) std::cout << "SYN ";
         if (pack->packet_head.flags == FIN) std::cout << "FIN ";
+        if (pack->packet_head.flags == SYNACK) std::cout << "SYN ACK";
+        if (pack->packet_head.flags == FINACK) std::cout << "FIN ACK";
         std::cout << "DUP";
         std::cout << std::endl;
     }
@@ -100,6 +108,8 @@ void output_packet_server(struct packet* pack, int type) {
         if (pack->packet_head.flags == ACK) std::cout << "ACK";
         if (pack->packet_head.flags == SYN) std::cout << "SYN";
         if (pack->packet_head.flags == FIN) std::cout << "FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << "SYN ACK";
+        if (pack->packet_head.flags == FINACK) std::cout << "FIN ACK";
         std::cout << std::endl;
     } else if (type == 2) {
         // "SEND" <Sequence Number> <Acknowledgement Number> <Connection ID> ["ACK"] ["SYN"] ["FIN"] ["DUP"]
@@ -111,6 +121,8 @@ void output_packet_server(struct packet* pack, int type) {
         if (pack->packet_head.flags == ACK) std::cout << "ACK";
         if (pack->packet_head.flags == SYN) std::cout << "SYN";
         if (pack->packet_head.flags == FIN) std::cout << "FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << "SYN ACK";
+        if (pack->packet_head.flags == FINACK) std::cout << "FIN ACK";
         std::cout << std::endl;
     } else if (type == 3) {
         // "SEND" <Sequence Number> <Acknowledgement Number> <Connection ID> ["ACK"] ["SYN"] ["FIN"] ["DUP"]
@@ -122,6 +134,8 @@ void output_packet_server(struct packet* pack, int type) {
         if (pack->packet_head.flags == ACK) std::cout << "ACK ";
         if (pack->packet_head.flags == SYN) std::cout << "SYN ";
         if (pack->packet_head.flags == FIN) std::cout << "FIN ";
+        if (pack->packet_head.flags == SYNACK) std::cout << "SYN ACK";
+        if (pack->packet_head.flags == FINACK) std::cout << "FIN ACK";
         std::cout << "DUP";
         std::cout << std::endl;
     } else if (type == 4) {
@@ -134,6 +148,8 @@ void output_packet_server(struct packet* pack, int type) {
         if (pack->packet_head.flags == ACK) std::cout << "ACK ";
         if (pack->packet_head.flags == SYN) std::cout << "SYN ";
         if (pack->packet_head.flags == FIN) std::cout << "FIN ";
+        if (pack->packet_head.flags == SYNACK) std::cout << "SYN ACK";
+        if (pack->packet_head.flags == FINACK) std::cout << "FIN ACK";
         std::cout << std::endl;
     }
 }

@@ -49,9 +49,6 @@ std::queue<int> paysize_q;
 int cwnd = SPEC_INIT_CWND;
 int ssthresh = SPEC_INIT_SS_THRESH;
 
-// fd_set rdfs;
-// FD_ZERO(&rdfs);
-
 // ========================================================================== //
 // FUNCTIONS
 // ========================================================================== //
@@ -168,6 +165,12 @@ int main(int argc, char** argv) {
     std::string OPT_HOST;
     std::string OPT_DIR;
 
+    signal(SIGQUIT, sig_handle);
+    signal(SIGTERM, sig_handle);
+
+    FD_ZERO(&rfds);
+    struct timeval tv;
+
     if (argc != 4)
         _exit("Invalid arguments.\n usage: \"./client <HOSTNAME-OR-IP> <PORT> <FILENAME>\"");
 
@@ -266,6 +269,9 @@ int main(int argc, char** argv) {
             printpacket(&curr_pack);
             output_packet(&curr_pack, cwnd, ssthresh, TYPE_SEND);
             seq_num += readLen;
+            if (seq_num > SPEC_MAX_SEQ) {
+                seq_num = seq_num % SPEC_MAX_SEQ;
+            }
             cwnd_q.push(seq_num);
             _log(seq_num);
             paysize_q.push(readLen);
