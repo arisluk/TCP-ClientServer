@@ -25,6 +25,7 @@
 #include <sys/utsname.h>
 
 // Filesystem
+#include <filesystem>
 
 // Local
 #include "common.h"
