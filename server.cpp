@@ -178,8 +178,12 @@ int main(int argc, char **argv) {
 
             char filename[50];
             snprintf(filename, 49, "%d.file", num_connections);
-            _log("FILENAMNE= ", filename);
-            int write_fd = open(filename, O_CREAT | O_WRONLY, S_IRWXU);
+            std::filesystem::path new_connection(filename);
+            std::filesystem::path full_path = dir / new_connection;
+            _log("FILENAME = ", full_path);
+            int write_fd = open(full_path.c_str(), O_CREAT | O_WRONLY, S_IRWXU);
+            err(write_fd, "opening path");
+            
             _log("WRITEFD = ", write_fd);
             writefd_v.push_back(write_fd);
             
