@@ -279,6 +279,9 @@ int main(int argc, char** argv) {
             if (readLen < SPEC_MAX_PAYLOAD_SIZE) {
                 done = true;
             }
+            if (readLen == 0) {
+                continue;
+            }
             curr_pack.packet_head.sequence_number = htonl(seq_num);
             curr_pack.packet_head.ack_number      = htonl(ack_num);
             curr_pack.packet_head.connection_id   = htons(cid);
