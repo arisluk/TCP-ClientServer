@@ -134,6 +134,8 @@ int main(int argc, char **argv) {
 
     _log(OPT_PORT, "|", OPT_DIR);
 
+    std::filesystem::path dir (OPT_DIR);
+    
     int socket_fd;
     socket_fd = open_socket(OPT_PORT);
 
