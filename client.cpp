@@ -168,8 +168,8 @@ int main(int argc, char** argv) {
     signal(SIGQUIT, sig_handle);
     signal(SIGTERM, sig_handle);
 
-    FD_ZERO(&rfds);
-    struct timeval tv;
+    // FD_ZERO(&rfds);
+    // struct timeval tv;
 
     if (argc != 4)
         _exit("Invalid arguments.\n usage: \"./client <HOSTNAME-OR-IP> <PORT> <FILENAME>\"");
@@ -213,6 +213,7 @@ int main(int argc, char** argv) {
     uint16_t cid = 0;
     int amt_sent = 0;
     bool done = false;
+    bool truedone = false;
 
     // try handshake
     handshake(socket_fd, p->ai_addr, p->ai_addrlen, &seq_num, &ack_num, &cid);
@@ -224,7 +225,7 @@ int main(int argc, char** argv) {
 
     seq_num++;
 
-    while (done == false) {
+    while (truedone == false) {
         packet curr_pack;
         memset(&curr_pack, 0, sizeof(struct packet));
         packet rcv_ack;
@@ -248,6 +249,9 @@ int main(int argc, char** argv) {
                 paysize_q.pop();
                 _log("HEY IM HERE");
             }
+            if (cwnd_q.size() == 0 && done) {
+                truedone = true;
+            }
             // seq_num = rcv_ack.packet_head.ack_number;
             // ack_num = rcv_ack.packet_head.sequence_number + 1;
         }
@@ -269,9 +273,7 @@ int main(int argc, char** argv) {
             printpacket(&curr_pack);
             output_packet(&curr_pack, cwnd, ssthresh, TYPE_SEND);
             seq_num += readLen;
-            if (seq_num > SPEC_MAX_SEQ) {
-                seq_num = seq_num % SPEC_MAX_SEQ;
-            }
+            seq_num = seq_num % (SPEC_MAX_SEQ+1);
             cwnd_q.push(seq_num);
             _log(seq_num);
             paysize_q.push(readLen);
@@ -292,6 +294,16 @@ int main(int argc, char** argv) {
     _log("talker: sent ", numbytes, " bytes");
     _log("SENT FIN PACKET:");
     printpacket(&finpack);
+    output_packet(&finpack, cwnd, ssthresh, TYPE_SEND);
+
+    packet finack;
+    memset(&finack, 0, sizeof(struct packet));
+    int rc = 0;
+    rc = recvfrom(socket_fd, &finack, 12, 0, NULL, 0);
+    err(rc, "while recvfrom socket");
+    _log("RCV FINACK PACKET:");
+    printpacket(&finack);
+    output_packet(&finack, cwnd, ssthresh, TYPE_RECV);
 
     // int numbytes = 0;
     // numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);

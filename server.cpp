@@ -238,7 +238,7 @@ int main(int argc, char **argv) {
             reply.packet_head.sequence_number = htonl(seq_v.at(vec_idx));
             reply.packet_head.flags = ACK;
             reply.packet_head.connection_id = htons(cid);
-            reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number) + rc-12); // HOW TO GET PAYLOAD SIZE?
+            reply.packet_head.ack_number = htonl((ntohl(buffer.packet_head.sequence_number) + rc-12)%(SPEC_MAX_SEQ+1)); // HOW TO GET PAYLOAD SIZE?
 
             int numbytes = 0;
             numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
