@@ -33,8 +33,42 @@ To dissect tcpdump-recorded file, you can use `-r <pcapfile>` option. For exampl
 
 ## TODO
 
-    ###########################################################
-    ##                                                       ##
-    ## REPLACE CONTENT OF THIS FILE WITH YOUR PROJECT REPORT ##
-    ##                                                       ##
-    ###########################################################
+Team:
+Kevin Tang 805419480
+Socket framework for client and server, congestion control.
+
+Aris Luk 905326942
+Packet formulation and transfer between client and server, error checks and timeouts.
+
+Young-Ghee Hong 105213270
+Server file writing, client file reads, error checks.
+
+Design:
+Client: The client first binds to a socket and establishes a connection with the server. Then it attempts a handshake. Then it repeatedly loops to send the entire requested file split into packets while also handling ACKs. Then it sends a FIN and waits for an ACK. Then it waits 2 seconds for stray FINs that it can ACK.
+Server: The server first binds to a socket and listens for any opening connections. If it receives a SYN packet, it establishes a connection and saves all required data for that connection (id, seq number, time connected, etc). It then repeatedly loops to received all payload packets and writes it to the correct file. When it receives a FIN, it sends a FIN ACK and then closes the connection. It can handle multiple connections at once by sorting incoming packets according to connection id.
+
+Problems: A main problem we had was figuring out how to have the client send multiple packets up to the cwnd without waiting for an ack. We solved this problem by using timeouts to keep sending packets while we didn't get any ACKs up to the cwnd.
+Another problem we had was figuring out how to do timeouts and waits for packets, which we solved by using ctime and setsockopt.
+
+Libraries used:
+sys/select.h
+sys/socket.h
+sys/types.h
+sys/utsname.h
+sys/time.h
+ctime
+fstream
+iostream
+queue
+string
+thread
+tuple
+filesystem
+dirent.h
+vector
+
+ACKs:
+For socket timeouts:
+https://stackoverflow.com/questions/39840877/c-recvfrom-timeout
+For directory navigation:
+https://c-for-dummies.com/blog/?p=3246
