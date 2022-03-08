@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
+#include <sys/time.h>
 
 // Filesystem
 
@@ -332,6 +333,55 @@ int main(int argc, char** argv) {
     _log("RCV FINACK PACKET:");
     printpacket(&finack);
     output_packet(&finack, cwnd, ssthresh, TYPE_RECV);
+
+    bool waiting = true;
+
+    packet leftover_fin;
+    memset(&leftover_fin, 0, sizeof(struct packet));
+
+    struct timeval waiting_room;
+    struct timeval waiting_room2;
+    gettimeofday(&waiting_room, NULL);
+
+    uint32_t start_time = 1000000 * waiting_room.tv_sec + waiting_room.tv_usec;
+    uint32_t curr_time;
+    seq_num++;
+    int newrc = 0;
+
+    while (waiting) {
+        gettimeofday(&waiting_room, NULL);
+        curr_time = 1000000 * waiting_room.tv_sec + waiting_room.tv_usec;
+        uint32_t time_diff = 2000000 - (curr_time - start_time);
+        if (time_diff > 2000000) {
+            waiting = false;
+        }
+        waiting_room2.tv_sec = time_diff/1000000;
+        waiting_room2.tv_usec = time_diff%1000000;
+
+        memset(&leftover_fin, 0, sizeof(struct packet));
+        setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &waiting_room2, sizeof(waiting_room2));
+        newrc = recvfrom(socket_fd, &leftover_fin, 12, 0, NULL, 0);
+        err(newrc, "WAITING ROOM while recvfrom socket");
+        _log("RCV LEFTOVER FIN PACKET:");
+        printpacket(&leftover_fin);
+        if (newrc > 0 && leftover_fin.packet_head.flags == FIN) {
+            output_packet(&leftover_fin, cwnd, ssthresh, TYPE_RECV);
+            packet newack;
+            memset(&newack, 0, sizeof(struct packet));
+            newack.packet_head.sequence_number = htonl(seq_num);
+            newack.packet_head.flags = ACK;
+            newack.packet_head.connection_id = htons(cid);
+            newack.packet_head.ack_number = htonl(ntohl(leftover_fin.packet_head.sequence_number)+1);
+
+            int newnumbytes = 0;
+            newnumbytes     = sendto(socket_fd, &newack, 12, 0, p->ai_addr, p->ai_addrlen);
+            err(newnumbytes, "Sending LEFTOVER ACK");
+            _log("LEFTOVER ACK talker: sent ", newnumbytes, " bytes");
+            _log("SENT LEFTOVER ACK PACKET:");
+            printpacket(&newack);
+            output_packet(&newack, cwnd, ssthresh, TYPE_SEND);
+        }
+    }
 
     shutdown(socket_fd, 2);
 

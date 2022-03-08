@@ -148,7 +148,9 @@ int main(int argc, char **argv) {
 
     uint16_t num_connections = 0;
 
-    while (true) {
+    bool tester = true;
+
+    while (tester) {
         memset(&buffer, 0, sizeof(struct packet));
         rc = recvfrom(socket_fd, &buffer, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
         err(rc, "SERVER: while recvfrom socket (server)");
@@ -222,6 +224,8 @@ int main(int argc, char **argv) {
             _log("SENT FINACK PACKET:");
             printpacket(&reply);
             output_packet_server(&reply, TYPE_SEND);
+
+            tester = false;
         }
         // else if (buffer.packet_head.flags == ACK) {
         //     continue;
