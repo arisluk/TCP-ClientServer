@@ -3,15 +3,16 @@
 // ========================================================================== //
 
 // Standard Libraries
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <ctime>
+#include <fstream>
 #include <iostream>
+#include <queue>
 #include <string>
 #include <thread>
 #include <tuple>
-#include <fstream>
-#include <unistd.h>
-#include <fcntl.h>
-#include <ctime>
-#include <queue>
 
 // C libraries
 #include <cerrno>
@@ -21,10 +22,10 @@
 // Networking
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
-#include <sys/select.h>
 
 // Filesystem
 
@@ -46,12 +47,27 @@ using namespace std;
 std::queue<uint32_t> cwnd_q;
 std::queue<int> paysize_q;
 
-int cwnd = SPEC_INIT_CWND;
+int cwnd     = SPEC_INIT_CWND;
 int ssthresh = SPEC_INIT_SS_THRESH;
 
 // ========================================================================== //
 // FUNCTIONS
 // ========================================================================== //
+void update_cwnd_ssthresh() {
+    if (cwnd < ssthresh) {
+        cwnd += SPEC_INIT_CWND;
+    } else {
+        cwnd += SPEC_INIT_CWND * SPEC_INIT_CWND / cwnd;
+    }
+    if (cwnd > SPEC_MAX_CWND) {
+        cwnd = SPEC_MAX_CWND;
+    }
+}
+
+void on_timeout() {
+    ssthresh = cwnd / 2;
+    cwnd     = SPEC_INIT_CWND;
+}
 
 void sig_handle(int sig) {
     if (sig == SIGTERM || sig == SIGQUIT) exit(0);
@@ -112,9 +128,9 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     packet syn;
     memset(&syn, 0, sizeof(struct packet));
     syn.packet_head.sequence_number = htonl(*seq_num);
-    syn.packet_head.ack_number = htonl(*ack_num);
-    syn.packet_head.connection_id = htons(0);
-    syn.packet_head.flags = SYN;
+    syn.packet_head.ack_number      = htonl(*ack_num);
+    syn.packet_head.connection_id   = htons(0);
+    syn.packet_head.flags           = SYN;
 
     int numbytes = 0;
     numbytes     = sendto(socket_fd, &syn, 12, 0, addr, size);
@@ -127,15 +143,15 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     packet syn_ack;
     memset(&syn_ack, 0, sizeof(struct packet));
     int rc = 0;
-    rc = recvfrom(socket_fd, &syn_ack, 12, 0, NULL, 0);
-    err(rc, "while recvfrom socket");
+    rc     = recvfrom(socket_fd, &syn_ack, 12, 0, NULL, 0);
+    _log("RECV returned: ", rc);
+    err(rc, "while recv from socket");
 
-    if (syn_ack.packet_head.flags != SYNACK)
-    {
+    if (syn_ack.packet_head.flags != SYNACK) {
         _exit("BAD SYNACK RECEIVED");
     }
 
-    *cid = ntohs(syn_ack.packet_head.connection_id);
+    *cid     = ntohs(syn_ack.packet_head.connection_id);
     *seq_num = ntohl(syn_ack.packet_head.ack_number);
     *ack_num = ntohl(syn_ack.packet_head.sequence_number) + 1;
     _log("RCV SYNACK PACKET:");
@@ -145,9 +161,9 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     packet ack;
     memset(&ack, 0, sizeof(struct packet));
     ack.packet_head.sequence_number = htonl(*seq_num);
-    ack.packet_head.ack_number = htonl(*ack_num);
-    ack.packet_head.connection_id = htons(*cid);
-    ack.packet_head.flags = ACK;
+    ack.packet_head.ack_number      = htonl(*ack_num);
+    ack.packet_head.connection_id   = htons(*cid);
+    ack.packet_head.flags           = ACK;
 
     int numbytes2 = 0;
     numbytes2     = sendto(socket_fd, &ack, 12, 0, addr, size);
@@ -168,8 +184,10 @@ int main(int argc, char** argv) {
     signal(SIGQUIT, sig_handle);
     signal(SIGTERM, sig_handle);
 
-    FD_ZERO(&rfds);
+    // FD_ZERO(&rfds);
     struct timeval tv;
+    tv.tv_sec  = 0;
+    tv.tv_usec = SPEC_RTO_MS * 1000;
 
     if (argc != 4)
         _exit("Invalid arguments.\n usage: \"./client <HOSTNAME-OR-IP> <PORT> <FILENAME>\"");
@@ -192,9 +210,8 @@ int main(int argc, char** argv) {
     struct addrinfo* p;
     std::tie(socket_fd, p) = open_socket(OPT_HOST.c_str(), OPT_PORT);
 
+    // FD_SET(socket_fd, &rfds)
     // udp socket is open and ready to send
-
-
 
     // example send
     // just change second and third fields to change data sent
@@ -210,19 +227,22 @@ int main(int argc, char** argv) {
 
     uint32_t seq_num;
     uint32_t ack_num = 0;
-    uint16_t cid = 0;
-    int amt_sent = 0;
-    bool done = false;
+    uint16_t cid     = 0;
+    int amt_sent     = 0;
+    bool done        = false;
 
     // try handshake
     handshake(socket_fd, p->ai_addr, p->ai_addrlen, &seq_num, &ack_num, &cid);
 
     int file_fd = open(argv[3], O_RDONLY);
-    if (file_fd < 0) {
-        _exit("couldn't open file", 1);
-    }
+    err(file_fd, "Opening file");
 
     seq_num++;
+
+    struct timeval socket_timeout;
+    socket_timeout.tv_sec  = 0;
+    socket_timeout.tv_usec = 5000;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
 
     while (done == false) {
         packet curr_pack;
@@ -233,45 +253,42 @@ int main(int argc, char** argv) {
         int rc = 0;
         if (amt_sent > 0) {
             rc = recvfrom(socket_fd, &rcv_ack, 12, 0, NULL, 0);
-            err(rc, "while recvfrom socket");
-            _log("RCV ACK PACKET:");
-            printpacket(&rcv_ack);
-
-            output_packet(&rcv_ack, cwnd, ssthresh, TYPE_RECV);
-        }
-
-        if (rc > 0) {
-            _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front());
-            if (ntohl(rcv_ack.packet_head.ack_number) == cwnd_q.front()) {
-                cwnd_q.pop();
-                amt_sent -= paysize_q.front();
-                paysize_q.pop();
-                _log("HEY IM HERE");
+            _log("RECV returned, ", rc);
+            // err(rc, "while recv from socket");
+            if (rc > 0) {
+                _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front());
+                if (ntohl(rcv_ack.packet_head.ack_number) == cwnd_q.front()) {
+                    cwnd_q.pop();
+                    amt_sent -= paysize_q.front();
+                    paysize_q.pop();
+                    _log("HEY IM HERE");
+                }
+                _log("RCV ACK PACKET:");
+                printpacket(&rcv_ack);
+                update_cwnd_ssthresh();
+                output_packet(&rcv_ack, cwnd, ssthresh, TYPE_RECV);
             }
-            // seq_num = rcv_ack.packet_head.ack_number;
-            // ack_num = rcv_ack.packet_head.sequence_number + 1;
         }
-        else if (amt_sent <= cwnd) {
+
+        if (amt_sent <= cwnd) {
             int readLen = read(file_fd, curr_pack.payload, SPEC_MAX_PAYLOAD_SIZE);
             if (readLen < SPEC_MAX_PAYLOAD_SIZE) {
                 done = true;
             }
             curr_pack.packet_head.sequence_number = htonl(seq_num);
-            curr_pack.packet_head.ack_number = htonl(ack_num);
-            curr_pack.packet_head.connection_id = htons(cid);
-            curr_pack.packet_head.flags = 0;
+            curr_pack.packet_head.ack_number      = htonl(ack_num);
+            curr_pack.packet_head.connection_id   = htons(cid);
+            curr_pack.packet_head.flags           = 0;
 
             int numbytes = 0;
-            numbytes     = sendto(socket_fd, &curr_pack, 12+readLen, 0, p->ai_addr, p->ai_addrlen);
+            numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);
             err(numbytes, "Sending payload");
             _log("talker: sent ", numbytes, " bytes");
             _log("SENT payload PACKET:");
             printpacket(&curr_pack);
             output_packet(&curr_pack, cwnd, ssthresh, TYPE_SEND);
             seq_num += readLen;
-            if (seq_num > SPEC_MAX_SEQ) {
-                seq_num = seq_num % SPEC_MAX_SEQ;
-            }
+            seq_num %= SPEC_MAX_SEQ + 1;
             cwnd_q.push(seq_num);
             _log(seq_num);
             paysize_q.push(readLen);
@@ -281,10 +298,10 @@ int main(int argc, char** argv) {
 
     packet finpack;
     memset(&finpack, 0, sizeof(struct packet));
-    finpack.packet_head.flags = FIN;
-    finpack.packet_head.connection_id = htons(cid);
+    finpack.packet_head.flags           = FIN;
+    finpack.packet_head.connection_id   = htons(cid);
     finpack.packet_head.sequence_number = htonl(seq_num);
-    finpack.packet_head.ack_number = htonl(0);
+    finpack.packet_head.ack_number      = htonl(0);
 
     int numbytes = 0;
     numbytes     = sendto(socket_fd, &finpack, 12, 0, p->ai_addr, p->ai_addrlen);
@@ -297,7 +314,6 @@ int main(int argc, char** argv) {
     // numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);
     // err(numbytes, "Sending message");
     // _log("talker: sent ", numbytes, " bytes to ", argv[1]);
-
 
     shutdown(socket_fd, 2);
 
