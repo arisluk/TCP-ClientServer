@@ -227,9 +227,10 @@ int main(int argc, char** argv) {
 
     uint32_t seq_num;
     uint32_t ack_num = 0;
-    uint16_t cid     = 0;
-    int amt_sent     = 0;
-    bool done        = false;
+    uint16_t cid = 0;
+    int amt_sent = 0;
+    bool done = false;
+    bool truedone = false;
 
     // try handshake
     handshake(socket_fd, p->ai_addr, p->ai_addrlen, &seq_num, &ack_num, &cid);
@@ -244,7 +245,7 @@ int main(int argc, char** argv) {
     socket_timeout.tv_usec = 5000;
     setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
 
-    while (done == false) {
+    while (truedone == false) {
         packet curr_pack;
         memset(&curr_pack, 0, sizeof(struct packet));
         packet rcv_ack;
@@ -267,6 +268,9 @@ int main(int argc, char** argv) {
                 printpacket(&rcv_ack);
                 update_cwnd_ssthresh();
                 output_packet(&rcv_ack, cwnd, ssthresh, TYPE_RECV);
+            }
+            if (cwnd_q.size() == 0 && done) {
+                truedone = true;
             }
         }
 
@@ -309,6 +313,16 @@ int main(int argc, char** argv) {
     _log("talker: sent ", numbytes, " bytes");
     _log("SENT FIN PACKET:");
     printpacket(&finpack);
+    output_packet(&finpack, cwnd, ssthresh, TYPE_SEND);
+
+    packet finack;
+    memset(&finack, 0, sizeof(struct packet));
+    int rc = 0;
+    rc = recvfrom(socket_fd, &finack, 12, 0, NULL, 0);
+    err(rc, "while recvfrom socket");
+    _log("RCV FINACK PACKET:");
+    printpacket(&finack);
+    output_packet(&finack, cwnd, ssthresh, TYPE_RECV);
 
     // int numbytes = 0;
     // numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);
