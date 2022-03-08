@@ -207,7 +207,7 @@ int main(int argc, char **argv) {
             memset(&reply, 0, sizeof(struct packet));
             seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
             reply.packet_head.sequence_number = htonl(seq_v.at(vec_idx));
-            reply.packet_head.flags = FINACK;
+            reply.packet_head.flags = ACK;
             reply.packet_head.connection_id = htons(cid);
             reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number)+1);
 
@@ -217,6 +217,7 @@ int main(int argc, char **argv) {
             _log("talker: sent ", numbytes, " bytes");
             _log("SENT FINACK PACKET:");
             printpacket(&reply);
+            output_packet_server(&reply, TYPE_SEND);
         }
         else if (buffer.packet_head.flags == ACK) {
             continue;
@@ -241,6 +242,7 @@ int main(int argc, char **argv) {
             _log("talker: sent ", numbytes, " bytes");
             _log("SENT ACK PACKET:");
             printpacket(&reply);
+            output_packet_server(&reply, TYPE_SEND);
         }
 
 

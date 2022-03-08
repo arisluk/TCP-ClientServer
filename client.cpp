@@ -143,7 +143,7 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     *ack_num = ntohl(syn_ack.packet_head.sequence_number) + 1;
     _log("RCV SYNACK PACKET:");
     printpacket(&syn_ack);
-    output_packet(&syn, cwnd, ssthresh, TYPE_RECV);
+    output_packet(&syn_ack, cwnd, ssthresh, TYPE_RECV);
 
     packet ack;
     memset(&ack, 0, sizeof(struct packet));
@@ -158,6 +158,7 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     _log("talker: sent ", numbytes, " bytes");
     _log("SENT ACK PACKET:");
     printpacket(&ack);
+    output_packet(&ack, cwnd, ssthresh, TYPE_SEND);
 
     return 0;
 }
@@ -237,10 +238,12 @@ int main(int argc, char** argv) {
         }
 
         if (rc > 0) {
-            if (rcv_ack.packet_head.ack_number == cwnd_q.front()) {
+            _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front());
+            if (ntohl(rcv_ack.packet_head.ack_number) == cwnd_q.front()) {
                 cwnd_q.pop();
                 amt_sent -= paysize_q.front();
                 paysize_q.pop();
+                _log("HEY IM HERE");
             }
             // seq_num = rcv_ack.packet_head.ack_number;
             // ack_num = rcv_ack.packet_head.sequence_number + 1;
@@ -264,6 +267,7 @@ int main(int argc, char** argv) {
             output_packet(&curr_pack, cwnd, ssthresh, TYPE_SEND);
             seq_num += readLen;
             cwnd_q.push(seq_num);
+            _log(seq_num);
             paysize_q.push(readLen);
             amt_sent += readLen;
         }
