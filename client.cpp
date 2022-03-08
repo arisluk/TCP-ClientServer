@@ -319,6 +319,8 @@ int main(int argc, char** argv) {
     _log("SENT FIN PACKET:");
     printpacket(&finpack);
     output_packet(&finpack, cwnd, ssthresh, TYPE_SEND);
+    
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, 0, 0);
 
     packet finack;
     memset(&finack, 0, sizeof(struct packet));

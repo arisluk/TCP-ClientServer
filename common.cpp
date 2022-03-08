@@ -18,7 +18,7 @@
 bool err(int rc, const char* message, int exit_code) {
     if (rc < 0) {
         if (message)
-            fprintf(stderr, "ERROR: %s in server. errno %d: %s\n", message, errno, strerror(errno));
+            fprintf(stderr, "ERROR: %s. errno %d: %s\n", message, errno, strerror(errno));
         else
             fprintf(stderr, "ERROR: Unspecified error. errno %d: %s\n", errno, strerror(errno));
         if (exit_code == -1)
