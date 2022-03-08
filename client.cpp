@@ -147,7 +147,7 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     int rc = 0;
     rc     = recvfrom(socket_fd, &syn_ack, 12, 0, NULL, 0);
     _log("RECV returned: ", rc);
-    err(rc, "while recv from socket");
+    err(rc, "HANDSHAKE while recv from socket");
 
     if (syn_ack.packet_head.flags != SYNACK) {
         _exit("BAD SYNACK RECEIVED");
@@ -257,14 +257,12 @@ int main(int argc, char** argv) {
         if (amt_sent > 0) {
             rc = recvfrom(socket_fd, &rcv_ack, 12, 0, NULL, 0);
             _log("RECV returned, ", rc);
-            // err(rc, "while recv from socket");
             if (rc > 0) {
                 _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front());
                 if (ntohl(rcv_ack.packet_head.ack_number) == cwnd_q.front()) {
                     cwnd_q.pop();
                     amt_sent -= paysize_q.front();
                     paysize_q.pop();
-                    _log("HEY IM HERE");
                 }
                 _log("RCV ACK PACKET:");
                 printpacket(&rcv_ack);
@@ -320,13 +318,17 @@ int main(int argc, char** argv) {
     printpacket(&finpack);
     output_packet(&finpack, cwnd, ssthresh, TYPE_SEND);
     
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, 0, 0);
+
+    struct timeval time_val_struct;
+    time_val_struct.tv_sec = 0;
+    time_val_struct.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &time_val_struct, sizeof(time_val_struct));
 
     packet finack;
     memset(&finack, 0, sizeof(struct packet));
     int rc = 0;
     rc = recvfrom(socket_fd, &finack, 12, 0, NULL, 0);
-    err(rc, "while recvfrom socket");
+    err(rc, "CLIENT END while recvfrom socket");
     _log("RCV FINACK PACKET:");
     printpacket(&finack);
     output_packet(&finack, cwnd, ssthresh, TYPE_RECV);

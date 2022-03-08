@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
     while (true) {
         memset(&buffer, 0, sizeof(struct packet));
         rc = recvfrom(socket_fd, &buffer, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
-        err(rc, "while recvfrom socket (server)");
+        err(rc, "SERVER: while recvfrom socket (server)");
         _log("RECV: Successfully got datagram, length ", rc);
 
         if (buffer.packet_head.flags > 7) {
