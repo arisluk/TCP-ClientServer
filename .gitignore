@@ -10,3 +10,6 @@ ref_server
 *.jpg
 *.txt
 *.file
+*.py
+reference-implementation/client-arm8
+reference-implementation/server-arm8

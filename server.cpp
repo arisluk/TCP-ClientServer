@@ -129,7 +129,6 @@ int main(int argc, char **argv) {
     packet incoming_packet;
 
     struct sockaddr_storage client_addr;
-    socklen_t address_length;
 
     uint16_t num_connections = 0;
 
@@ -155,6 +154,7 @@ int main(int argc, char **argv) {
             smallest_seq = value.begin()->first;
             if (smallest_seq == database.at(c_id).seq)
             {
+                //
                 incoming_packet = value.begin()->second;
                 if (value.size() == 1) {
                     packet_from = PACKET_LAST_FROM_BUFFER;
@@ -165,24 +165,32 @@ int main(int argc, char **argv) {
         }
 
         if (packet_from == PACKET_FROM_REC) {
-            rc = recvfrom(socket_fd, &incoming_packet, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
+            addr_len = sizeof(client_addr);
+            rc = recvfrom(socket_fd, &incoming_packet, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, (socklen_t*)&addr_len);
             err(rc, "SERVER: while recvfrom socket (server)");
             _log("RECV: Successfully got datagram, length ", rc);
             _log("RECEIVED PACKET, at time:" , time_now_ms());
-            printpacket(&incoming_packet);
-            output_packet_server(&incoming_packet, TYPE_RECV);
-
+            
             incoming_seq = ntohl(incoming_packet.packet_head.sequence_number);
             incoming_ack = ntohl(incoming_packet.packet_head.ack_number);
             cid = ntohs(incoming_packet.packet_head.connection_id);
             incoming_flag = incoming_packet.packet_head.flags;
+
+            if (incoming_flag != SYN && incoming_seq < database.at(cid).seq) {
+                output_packet_server(&incoming_packet, TYPE_DROP);
+                continue;
+            }
+
+            printpacket(&incoming_packet);
+            output_packet_server(&incoming_packet, TYPE_RECV);
+
         } else if (packet_from == PACKET_FROM_BUFFER || packet_from == PACKET_LAST_FROM_BUFFER) {
             incoming_seq = ntohl(incoming_packet.packet_head.sequence_number);
             incoming_ack = ntohl(incoming_packet.packet_head.ack_number);
             cid = ntohs(incoming_packet.packet_head.connection_id);
             incoming_flag = incoming_packet.packet_head.flags;
 
-            if (database.count(cid) <= 0) {
+            if (incoming_flag != SYN && database.count(cid) <= 0) {
                 out_of_order.erase(cid);
                 continue;
             }
@@ -209,12 +217,16 @@ int main(int argc, char **argv) {
         for (auto const& [key, val] : database)
         {
             uint64_t time_diff = time_now - val.last_time;
-            if (time_diff > 10000) {
+            _log(key, " time diff = ", time_diff / 10);
+            if (time_now > val.last_time && time_diff > 10000) {
                 database.at(key).state = STATE_FIN;
-                const char err_msg[] = "ERROR";
+                char err_msg[50];
+                sprintf(err_msg, "ERROR%ld, %ld", key, time_diff);
                 int written = write(database.at(key).writefd, err_msg, sizeof(err_msg));
                 _log("writte = ", written);
                 close(database.at(key).writefd);
+                database.erase(key);
+                out_of_order.erase(key);
             }
         }
 
@@ -276,15 +288,25 @@ int main(int argc, char **argv) {
             reply_cid = cid;
             reply_flag = ACK;
             reply_type = TYPE_SEND;
-            if (database.at(cid).state == STATE_FIN) reply_needed = false;
+            if (database.at(cid).state == STATE_FIN) {
+                reply_needed = false;
+                database.erase(cid);
+                out_of_order.erase(cid);
+            }
         }
         else {
-            database.at(cid).seq = (incoming_seq + rc - 12)  % (SPEC_MAX_SEQ + 1);
+            if (incoming_seq != database.at(cid).seq) {
+                database.at(cid).seq = database.at(cid).seq;
+                if (packet_from == PACKET_FROM_REC) {
+                    packet copy = incoming_packet;
+                    out_of_order[cid][incoming_seq] = copy;
+                }
+            } else {
+                database.at(cid).seq = (incoming_seq + rc - 12) % (SPEC_MAX_SEQ + 1);
+                int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
+                _log("writte = ", written);
+            }
             database.at(cid).last_time = time_now_ms();
-
-            if (database.count(cid) <= 0) continue;
-            int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
-            _log("writte = ", written);
 
             reply_needed = true;
             reply_seq = database.at(cid).ack;
@@ -294,7 +316,7 @@ int main(int argc, char **argv) {
             reply_type = TYPE_SEND;
         }
 
-        if (reply_needed && packet_from != PACKET_FROM_BUFFER) {
+        if (reply_needed) {
             packet reply;
             memset(&reply, 0, sizeof(struct packet));
             reply.packet_head.sequence_number = htonl(reply_seq);
