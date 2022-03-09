@@ -159,6 +159,8 @@ int main(int argc, char **argv) {
         for (auto& [c_id, value] : out_of_order) {
             _log("CHECK ", c_id, ", ", value.size());
             if (value.size() == 0) continue;
+            if (database.count(c_id) <= 0) continue;
+            if (database[c_id].state == STATE_FIN) continue;
 
             uint32_t smallest_seq = value.begin()->first;
             while (smallest_seq < database.at(c_id).seq)
