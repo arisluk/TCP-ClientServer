@@ -7,3 +7,5 @@ client
 *.out
 ref_client
 ref_server
+*.jpg
+*.txt
