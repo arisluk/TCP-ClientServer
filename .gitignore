@@ -9,3 +9,4 @@ ref_client
 ref_server
 *.jpg
 *.txt
+*.file

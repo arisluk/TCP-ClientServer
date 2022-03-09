@@ -40,6 +40,8 @@ using namespace std;
 
 std::map<unsigned int, Store> database;
 
+std::map<uint16_t, std::map<int32_t, packet>> out_of_order;
+
 // ========================================================================== //
 // FUNCTIONS
 // ========================================================================== //
@@ -133,13 +135,58 @@ int main(int argc, char **argv) {
 
     while (true) {
         memset(&incoming_packet, 0, sizeof(struct packet));
-        rc = recvfrom(socket_fd, &incoming_packet, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
-        err(rc, "SERVER: while recvfrom socket (server)");
 
-        uint32_t incoming_seq = ntohl(incoming_packet.packet_head.sequence_number);
-        uint32_t incoming_ack = ntohl(incoming_packet.packet_head.ack_number);
-        uint16_t cid = ntohs(incoming_packet.packet_head.connection_id);
-        uint8_t incoming_flag = incoming_packet.packet_head.flags;
+        
+
+        uint32_t incoming_seq;
+        uint32_t incoming_ack;
+        uint16_t cid;
+        uint8_t incoming_flag;
+
+        int packet_from = PACKET_FROM_REC;
+        for (auto& [c_id, value] : out_of_order) {
+            uint32_t smallest_seq = value.begin()->first;
+            while (smallest_seq < database.at(c_id).seq)
+            {
+                value.erase(smallest_seq);
+                smallest_seq = value.begin()->first;
+            }
+            
+            smallest_seq = value.begin()->first;
+            if (smallest_seq == database.at(c_id).seq)
+            {
+                incoming_packet = value.begin()->second;
+                if (value.size() == 1) {
+                    packet_from = PACKET_LAST_FROM_BUFFER;
+                } else {
+                    packet_from = PACKET_FROM_BUFFER;
+                }
+            };
+        }
+
+        if (packet_from == PACKET_FROM_REC) {
+            rc = recvfrom(socket_fd, &incoming_packet, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
+            err(rc, "SERVER: while recvfrom socket (server)");
+            _log("RECV: Successfully got datagram, length ", rc);
+            _log("RECEIVED PACKET, at time:" , time_now_ms());
+            printpacket(&incoming_packet);
+            output_packet_server(&incoming_packet, TYPE_RECV);
+
+            incoming_seq = ntohl(incoming_packet.packet_head.sequence_number);
+            incoming_ack = ntohl(incoming_packet.packet_head.ack_number);
+            cid = ntohs(incoming_packet.packet_head.connection_id);
+            incoming_flag = incoming_packet.packet_head.flags;
+        } else if (packet_from == PACKET_FROM_BUFFER || packet_from == PACKET_LAST_FROM_BUFFER) {
+            incoming_seq = ntohl(incoming_packet.packet_head.sequence_number);
+            incoming_ack = ntohl(incoming_packet.packet_head.ack_number);
+            cid = ntohs(incoming_packet.packet_head.connection_id);
+            incoming_flag = incoming_packet.packet_head.flags;
+
+            if (database.count(cid) <= 0) {
+                out_of_order.erase(cid);
+                continue;
+            }
+        }
 
         if(cid != 0 && database.count(cid) <= 0) {
             output_packet_server(&incoming_packet, TYPE_DROP);
@@ -148,18 +195,14 @@ int main(int argc, char **argv) {
 
         uint64_t time_now = time_now_ms();
 
-        if (incoming_packet.packet_head.flags > 7) _exit("Incorrect flags");
+        if (incoming_flag > 7) _exit("Incorrect flags");
 
-        _log("RECV: Successfully got datagram, length ", rc);
-        _log("RECEIVED PACKET, at time:" , time_now);
-        printpacket(&incoming_packet);
-        output_packet_server(&incoming_packet, TYPE_RECV);
 
         bool reply_needed = false;
-        uint32_t reply_seq = ntohl(incoming_packet.packet_head.sequence_number);
-        uint32_t reply_ack = ntohl(incoming_packet.packet_head.ack_number);
-        uint16_t reply_cid = ntohs(incoming_packet.packet_head.connection_id);
-        uint8_t reply_flag = incoming_packet.packet_head.flags;
+        uint32_t reply_seq = 0;
+        uint32_t reply_ack = 0;
+        uint16_t reply_cid = 0;
+        uint8_t reply_flag = 0;
         int reply_type = 0;
 
         // Check timing for RTO
@@ -215,6 +258,10 @@ int main(int argc, char **argv) {
         else if (incoming_flag == ACK) {
             if (incoming_seq != database.at(cid).seq) {
                 database.at(cid).seq = database.at(cid).seq;
+                if (packet_from == PACKET_FROM_REC) {
+                    packet copy = incoming_packet;
+                    out_of_order[cid][incoming_seq] = copy;
+                }
             } else {
                 database.at(cid).seq = (incoming_seq + rc - 12) % (SPEC_MAX_SEQ + 1);
                 int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
@@ -247,7 +294,7 @@ int main(int argc, char **argv) {
             reply_type = TYPE_SEND;
         }
 
-        if (reply_needed) {
+        if (reply_needed && packet_from != PACKET_FROM_BUFFER) {
             packet reply;
             memset(&reply, 0, sizeof(struct packet));
             reply.packet_head.sequence_number = htonl(reply_seq);

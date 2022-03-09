@@ -54,6 +54,10 @@
 #define STATE_ACTIVE 1
 #define STATE_FIN 2
 
+#define PACKET_FROM_REC 0
+#define PACKET_FROM_BUFFER 1
+#define PACKET_LAST_FROM_BUFFER 2
+
 #pragma pack(1)
 struct header {
     uint32_t sequence_number;
