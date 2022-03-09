@@ -49,6 +49,9 @@
 #define TYPE_DUP 3
 #define TYPE_DROP 4
 
+#define STATE_ACTIVE 1
+#define STATE_FIN 2
+
 #pragma pack(1)
 struct header {
     uint32_t sequence_number;
@@ -57,14 +60,12 @@ struct header {
     uint8_t empty;
     uint8_t flags;
 };
-
 typedef struct header header;
 
 struct packet {
     header packet_head;
     char payload[SPEC_MAX_PAYLOAD_SIZE];
 };
-
 typedef struct packet packet;
 
 void printpacket(struct packet*);
@@ -91,4 +92,16 @@ void _log(Args&&... args) {
         std::cerr << std::endl;
     }
 }
+
+class Store {
+    public:
+        Store();    
+        Store(uint32_t seq, uint32_t ack, uint64_t last_time, int writefd, int state);
+        uint32_t seq; // what we are expecting, latest in-order seq + 512
+        uint32_t ack; // last packet by us that client ACKed
+        uint64_t last_time;
+        int writefd;
+        int state;
+};
+
 #endif

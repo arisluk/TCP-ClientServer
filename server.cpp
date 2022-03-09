@@ -4,6 +4,7 @@
 
 // Standard Libraries
 #include <iostream>
+#include <chrono>
 #include <string>
 #include <thread>
 #include <fstream>
@@ -12,6 +13,7 @@
 #include <ctime>
 #include <vector>
 #include <dirent.h>
+#include <map>
 
 // C libraries
 #include <cerrno>
@@ -36,24 +38,13 @@ using namespace std;
 // DEFINITIONS
 // ========================================================================== //
 
-// techncially this can be like 524 bc thats the max datagram size i think?
-
-void *get_in_addr(struct sockaddr *sa) {
-    return sa->sa_family == AF_INET
-               ? (void *)&(((struct sockaddr_in *)sa)->sin_addr)
-               : (void *)&(((struct sockaddr_in6 *)sa)->sin6_addr);
-}
-
-std::vector<uint16_t> cid_v;
-std::vector<uint32_t> seq_v;
-std::vector<time_t> time_v;
-std::vector<int> writefd_v;
+std::map<unsigned int, Store> database;
 
 // ========================================================================== //
 // FUNCTIONS
 // ========================================================================== //
 
-int open_socket(int port) {
+int open_socket(int port, int* addrlen) {
     // https://man7.org/linux/man-pages/man3/getaddrinfo.3.html
 
     auto port_name = std::to_string(port);
@@ -67,9 +58,10 @@ int open_socket(int port) {
     // clear structs
     memset(&hints, 0, sizeof(hints));
 
-    hints.ai_family   = AF_UNSPEC;   // SUPPORT IPV6
+    hints.ai_family   = AF_INET;   // SUPPORT IPV4 ONLY
     hints.ai_socktype = SOCK_DGRAM;  // SOCK_STREAM - TCP, SOCK_DGRAM -> UDP
-    hints.ai_flags    = AI_PASSIVE;  // ACCEPT INCOMING CONNECTIONS ON ANY "WILDCARD ADDRESSES"
+    hints.ai_flags    = AI_PASSIVE;
+    hints.ai_protocol = IPPROTO_UDP;
 
     rc = getaddrinfo(NULL, port_name.c_str(), &hints, &server_info);
     if (rc != 0) {
@@ -80,16 +72,14 @@ int open_socket(int port) {
 
     for (p = server_info; p != NULL; p = p->ai_next) {
         socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (socket_fd == -1) {
-            _log("SOCKET BIND: skipped a socket");
-            continue;
-        }
+        if (socket_fd == -1) continue;
 
         if (bind(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
             shutdown(socket_fd, 2);
             _log("SOCKET BIND: failed a bind");
             continue;
         }
+        *addrlen = p->ai_addrlen;
         break;
     }
 
@@ -107,8 +97,9 @@ int open_socket(int port) {
     return socket_fd;
 }
 
-void connection(int socket_fd, int cid) {
-
+uint64_t time_now_ms() {
+    using namespace std::chrono;
+    return std::chrono::duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 int main(int argc, char **argv) {
@@ -132,158 +123,139 @@ int main(int argc, char **argv) {
         _exit("Invalid arguments.\nusage: \"./server <PORT> <FILE-DIR>\"");
     }
 
-    _log(OPT_PORT, "|", OPT_DIR);
-
     std::filesystem::path dir (OPT_DIR);
     
     int socket_fd;
-    socket_fd = open_socket(OPT_PORT);
+    int addr_len = 0;
+    socket_fd = open_socket(OPT_PORT, &addr_len);
 
-    packet buffer;
+    packet incoming_packet;
 
     struct sockaddr_storage client_addr;
     socklen_t address_length;
 
-    // char s[INET6_ADDRSTRLEN];
-
     uint16_t num_connections = 0;
 
-    // bool tester = true;
-
     while (true) {
-        memset(&buffer, 0, sizeof(struct packet));
-        rc = recvfrom(socket_fd, &buffer, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
+        memset(&incoming_packet, 0, sizeof(struct packet));
+        rc = recvfrom(socket_fd, &incoming_packet, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, &address_length);
         err(rc, "SERVER: while recvfrom socket (server)");
-        _log("RECV: Successfully got datagram, length ", rc);
 
-        if (buffer.packet_head.flags > 7) {
-            _exit("Not Used in header incorrect");
+        uint32_t incoming_seq = ntohl(incoming_packet.packet_head.sequence_number);
+        uint32_t incoming_ack = ntohl(incoming_packet.packet_head.ack_number);
+        uint16_t cid = ntohs(incoming_packet.packet_head.connection_id);
+        uint8_t incoming_flag = incoming_packet.packet_head.flags;
+
+        if(cid != 0 && database.count(cid) <= 0) {
+            output_packet_server(&incoming_packet, TYPE_DROP);
+            continue;
         }
 
-        _log("RECEIVED PACKET:");
-        printpacket(&buffer);
-        output_packet_server(&buffer, TYPE_RECV);
+        uint64_t time_now = time_now_ms();
 
-        // succesfully got something
+        if (incoming_packet.packet_head.flags > 7) _exit("Incorrect flags");
 
-        //server logic here
+        _log("RECV: Successfully got datagram, length ", rc);
+        _log("RECEIVED PACKET, at time:" , time_now);
+        printpacket(&incoming_packet);
+        output_packet_server(&incoming_packet, TYPE_RECV);
+
+        bool reply_needed = false;
+        uint32_t reply_seq = ntohl(incoming_packet.packet_head.sequence_number);
+        uint32_t reply_ack = ntohl(incoming_packet.packet_head.ack_number);
+        uint16_t reply_cid = ntohs(incoming_packet.packet_head.connection_id);
+        uint8_t reply_flag = incoming_packet.packet_head.flags;
+        int reply_type = 0;
+
 
         // new connection (incoming SYN)
-        if (buffer.packet_head.flags == SYN) {
+        if (incoming_flag == SYN) {
             num_connections++;
-            time_t curr_time;
-            time(&curr_time);
-            uint32_t seq_num = 4321; // init seq_num for new connection
-            cid_v.push_back(num_connections);
-            seq_v.push_back(seq_num);
-            time_v.push_back(curr_time);
-
+            
             char filename[50];
             snprintf(filename, 49, "%d.file", num_connections);
             std::filesystem::path new_connection(filename);
             std::filesystem::path full_path = dir / new_connection;
-            _log("FILENAME = ", full_path);
+
             int write_fd = open(full_path.c_str(), O_CREAT | O_WRONLY, S_IRWXU);
             err(write_fd, "opening path");
             
             _log("WRITEFD = ", write_fd);
-            writefd_v.push_back(write_fd);
             
-            packet reply;
-            memset(&reply, 0, sizeof(struct packet));
-            reply.packet_head.sequence_number = htonl(seq_num);
-            reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number) + 1);
-            reply.packet_head.connection_id = htons(num_connections);
-            reply.packet_head.flags = SYNACK;
+            reply_needed = true;
+            reply_seq = 4321;
+            reply_ack = incoming_seq + 1;
+            reply_cid = num_connections;
+            reply_flag = SYNACK;
+            reply_type = TYPE_SEND;
 
-            int numbytes = 0;
-            numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
-            err(numbytes, "Sending SYNACK");
-            _log("talker: sent ", numbytes, " bytes");
-            _log("SENT SYNACK PACKET:");
-            printpacket(&reply);
-            output_packet_server(&reply, TYPE_SEND);
+            Store temp(reply_seq, 0, time_now_ms(), write_fd, STATE_ACTIVE);
+            database[num_connections] = temp;
+        } else if (incoming_packet.packet_head.flags == FIN) {
+            database.at(cid).last_time = time_now_ms();
+            database.at(cid).state = STATE_FIN;
+            close(database.at(cid).writefd);
+
+            reply_needed = true;
+            reply_seq = database.at(cid).ack;
+            reply_ack = incoming_seq + 1;
+            reply_cid = cid;
+            reply_flag = FINACK;
+            reply_type = TYPE_SEND;
         }
-        else if (buffer.packet_head.flags == FIN) {
-            int cid = ntohs(buffer.packet_head.connection_id);
-            int vec_idx = cid-1;
-            close(writefd_v.at(vec_idx));
+        else if (incoming_packet.packet_head.flags == ACK) {
+            database.at(cid).seq = (incoming_seq + rc - 12) % (SPEC_MAX_SEQ + 1);
+            database.at(cid).ack = incoming_ack;
+            database.at(cid).last_time = time_now_ms();
 
-            packet reply;
-            memset(&reply, 0, sizeof(struct packet));
-            // seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
-            reply.packet_head.sequence_number = htonl(seq_v.at(vec_idx));
-            reply.packet_head.flags = FINACK;
-            reply.packet_head.connection_id = htons(cid);
-            reply.packet_head.ack_number = htonl(ntohl(buffer.packet_head.sequence_number) + 1);
-
-            int numbytes = 0;
-            numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
-            err(numbytes, "Sending FINACK");
-            _log("talker: sent ", numbytes, " bytes");
-            _log("SENT FINACK PACKET:");
-            printpacket(&reply);
-            output_packet_server(&reply, TYPE_SEND);
-
-            // tester = false;
-        }
-        // else if (buffer.packet_head.flags == ACK) {
-        //     continue;
-        // }
-        else {
-            int cid = ntohs(buffer.packet_head.connection_id);
-            int vec_idx = cid-1;
-            int written = write(writefd_v.at(vec_idx), buffer.payload, rc-12);
+            int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
             _log("writte = ", written);
 
-            packet reply;
-            memset(&reply, 0, sizeof(struct packet));
-            seq_v.at(vec_idx) = seq_v.at(vec_idx) + 1;
-            reply.packet_head.sequence_number = htonl(seq_v.at(vec_idx));
-            reply.packet_head.flags = ACK;
-            reply.packet_head.connection_id = htons(cid);
-            reply.packet_head.ack_number = htonl((ntohl(buffer.packet_head.sequence_number) + rc-12) % (SPEC_MAX_SEQ + 1));
+            reply_needed = true;
+            reply_seq = incoming_ack;
+            reply_ack = database.at(cid).seq;
+            reply_cid = cid;
+            reply_flag = ACK;
+            reply_type = TYPE_SEND;
 
-            int numbytes = 0;
-            numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, address_length);
-            err(numbytes, "Sending ACK");
-            _log("talker: sent ", numbytes, " bytes");
-            _log("SENT ACK PACKET:");
-            printpacket(&reply);
-            output_packet_server(&reply, TYPE_SEND);
+            
+            if (database.at(cid).state == STATE_FIN) reply_needed = false;
+        }
+        else {
+            database.at(cid).seq = (incoming_seq + rc - 12)  % (SPEC_MAX_SEQ + 1);
+            database.at(cid).last_time = time_now_ms();
+
+            if (database.count(cid) <= 0) continue;
+            int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
+            _log("writte = ", written);
+
+            reply_needed = true;
+            reply_seq = database.at(cid).ack;
+            reply_ack = database.at(cid).seq;
+            reply_flag = ACK;
+            reply_cid = cid;
+            reply_type = TYPE_SEND;
         }
 
+        if (reply_needed) {
+            packet reply;
+            memset(&reply, 0, sizeof(struct packet));
+            reply.packet_head.sequence_number = htonl(reply_seq);
+            reply.packet_head.ack_number = htonl(reply_ack);
+            reply.packet_head.connection_id = htons(reply_cid);
+            reply.packet_head.flags = reply_flag;
 
-        // _log("got packet from ", inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), s, sizeof(s)));
+            int numbytes = 0;
+            numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, addr_len);
+            _log(&client_addr, addr_len);
+            err(numbytes, "Sending response");
+            _log("talker: sent ", numbytes, " bytes");
+            _log("SENT PACKET:");
+            printpacket(&reply);
+            output_packet_server(&reply, reply_type);    
+        }
+
     }
-
-    // TESTING PART DELETE AFTER
-            // packet test;
-            // memset(&test, 0, sizeof(struct packet));
-            // test.packet_head.sequence_number = htonl(4324);
-            // test.packet_head.flags = FIN;
-            // test.packet_head.connection_id = htons(1);
-            // test.packet_head.ack_number = htonl(0);
-            // int nnumbytes = 0;
-            // nnumbytes     = sendto(socket_fd, &test, 12, 0, (struct sockaddr *)&client_addr, address_length);
-            // err(nnumbytes, "Sending test");
-            // _log("test: sent ", nnumbytes, " bytes");
-            // _log("SENT test PACKET:");
-            // printpacket(&test);
-            // output_packet_server(&test, TYPE_SEND);
-            // nnumbytes     = sendto(socket_fd, &test, 12, 0, (struct sockaddr *)&client_addr, address_length);
-            // err(nnumbytes, "Sending test");
-            // _log("test: sent ", nnumbytes, " bytes");
-            // _log("SENT test PACKET:");
-            // printpacket(&test);
-            // output_packet_server(&test, TYPE_SEND);
-            // nnumbytes     = sendto(socket_fd, &test, 12, 0, (struct sockaddr *)&client_addr, address_length);
-            // err(nnumbytes, "Sending test");
-            // _log("test: sent ", nnumbytes, " bytes");
-            // _log("SENT test PACKET:");
-            // printpacket(&test);
-            // output_packet_server(&test, TYPE_SEND);
-            // END OF TESTING
 
     shutdown(socket_fd, 2);
     _log("SHUTDOWN: Closing socket fd");

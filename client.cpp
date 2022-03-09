@@ -76,22 +76,19 @@ void sig_handle(int sig) {
 }
 
 std::tuple<int, struct addrinfo*> open_socket(const char* hostname, int port) {
-    // https://man7.org/linux/man-pages/man3/getaddrinfo.3.html
 
     auto port_name = std::to_string(port);
     _log("SOCKET SETUP: Port name: ", port_name, "\n");
 
     struct addrinfo hints, *server_info, *p;
-
-    int socket_fd;
-    int rc;
-
-    // Clear structs
     memset(&hints, 0, sizeof(hints));
 
-    hints.ai_family   = AF_UNSPEC;   // SUPPORT IPV6
+    int socket_fd = 0;
+    int rc = 0;
+
+
+    hints.ai_family   = AF_INET;   // SUPPORT IPV4 ONLY
     hints.ai_socktype = SOCK_DGRAM;  // SOCK_STREAM - TCP, SOCK_DGRAM -> UDP
-    hints.ai_flags = AI_PASSIVE;
     hints.ai_protocol = IPPROTO_UDP;
 
     rc = getaddrinfo(hostname, port_name.c_str(), &hints, &server_info);
@@ -103,24 +100,14 @@ std::tuple<int, struct addrinfo*> open_socket(const char* hostname, int port) {
 
     for (p = server_info; p != NULL; p = p->ai_next) {
         socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (socket_fd == -1) {
-            _log("SOCKET: skipped a socket");
-            continue;
-        }
+        if (socket_fd == -1) continue;
         break;
     }
 
-    if (p == NULL) {
-        _log("SOCKET: failed to create socket");
-        _exit("Failed to bind to socket", 2);
-    } else {
-        _log("SOCKET: successfully created socket");
-    }
-
-    freeaddrinfo(server_info);
-
+    if (p == NULL) _exit("Failed to bind to socket", 2);
     _log("SOCKET: ready to send");
 
+    freeaddrinfo(server_info);
     return std::make_tuple(socket_fd, p);
 }
 
@@ -180,17 +167,16 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
 }
 
 int main(int argc, char** argv) {
+    // ========================================================================== //
+    //     get arguments
+    // ========================================================================== //
+
     int OPT_PORT = 0;
     std::string OPT_HOST;
     std::string OPT_DIR;
 
     signal(SIGQUIT, sig_handle);
     signal(SIGTERM, sig_handle);
-
-    // FD_ZERO(&rfds);
-    struct timeval tv;
-    tv.tv_sec  = 0;
-    tv.tv_usec = SPEC_RTO_MS * 1000;
 
     if (argc != 4)
         _exit("Invalid arguments.\n usage: \"./client <HOSTNAME-OR-IP> <PORT> <FILENAME>\"");
@@ -203,30 +189,30 @@ int main(int argc, char** argv) {
         OPT_DIR  = argv[3];
         if (OPT_PORT < 0 || OPT_PORT > 65535) throw std::invalid_argument("Invalid Port");
     } catch (const std::exception& e) {
-        std::cerr << "Error in: " << e.what() << std::endl;
-        _exit("Invalid arguments.\nusage: \"./server <PORT> <FILE-DIR>\"", 1);
+        _exit("Invalid arguments.\nusage: \"./client <HOSTNAME-OR-IP> <PORT> <FILE-DIR>\"");
     }
 
-    _log(OPT_HOST, "|", OPT_PORT, "|", OPT_DIR);
+    int file_fd = open(argv[3], O_RDONLY);
+    err(file_fd, "Opening file");
 
+
+
+    // ========================================================================== //
+    //     open sockets
+    // ========================================================================== //
+
+
+    // open socket
     int socket_fd;
     struct addrinfo* p;
     std::tie(socket_fd, p) = open_socket(OPT_HOST.c_str(), OPT_PORT);
 
-    // FD_SET(socket_fd, &rfds)
-    // udp socket is open and ready to send
+    // make socket non-blocking
+    struct timeval socket_timeout;
+    socket_timeout.tv_sec  = 0;
+    socket_timeout.tv_usec = 5000;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
 
-    // example send
-    // just change second and third fields to change data sent
-    // int numbytes = 0;
-    // numbytes     = sendto(socket_fd, argv[3], strlen(argv[3]), 0, p->ai_addr, p->ai_addrlen);
-    // err(numbytes, "Sending message");
-    // _log("talker: sent ", numbytes, " bytes to ", argv[1]);
-
-    /*
-
-        client logic here
-    */
 
     uint32_t seq_num;
     uint32_t ack_num = 0;
@@ -238,15 +224,7 @@ int main(int argc, char** argv) {
     // try handshake
     handshake(socket_fd, p->ai_addr, p->ai_addrlen, &seq_num, &ack_num, &cid);
 
-    int file_fd = open(argv[3], O_RDONLY);
-    err(file_fd, "Opening file");
 
-    seq_num = seq_num;
-
-    struct timeval socket_timeout;
-    socket_timeout.tv_sec  = 0;
-    socket_timeout.tv_usec = 5000;
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
 
     while (truedone == false) {
         packet curr_pack;
@@ -257,7 +235,7 @@ int main(int argc, char** argv) {
         int rc = 0;
         if (amt_sent > 0) {
             rc = recvfrom(socket_fd, &rcv_ack, 12, 0, NULL, 0);
-            _log("RECV returned, ", rc);
+            _log("RECV returned, ", rc, "done: ", done, "truedone: ", truedone);
             if (rc > 0) {
                 _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front());
                 if (ntohl(rcv_ack.packet_head.ack_number) == cwnd_q.front()) {
@@ -280,9 +258,7 @@ int main(int argc, char** argv) {
             if (readLen < SPEC_MAX_PAYLOAD_SIZE) {
                 done = true;
             }
-            if (readLen == 0) {
-                continue;
-            }
+            if (readLen == 0) continue;
             curr_pack.packet_head.sequence_number = htonl(seq_num);
             curr_pack.packet_head.ack_number      = htonl(ack_num);
             curr_pack.packet_head.connection_id   = htons(cid);
@@ -291,7 +267,7 @@ int main(int argc, char** argv) {
             int numbytes = 0;
             numbytes     = sendto(socket_fd, &curr_pack, 12 + readLen, 0, p->ai_addr, p->ai_addrlen);
             err(numbytes, "Sending payload");
-            _log("amt_sent talker: sent ", numbytes, " bytes");
+            _log("SENT ", numbytes, " bytes");
             _log("SENT payload PACKET:");
             printpacket(&curr_pack);
             output_packet(&curr_pack, cwnd, ssthresh, TYPE_SEND);
