@@ -207,8 +207,16 @@ int main(int argc, char** argv) {
         _exit("Invalid arguments.\nusage: \"./client <HOSTNAME-OR-IP> <PORT> <FILE-DIR>\"");
     }
 
-    int file_fd = open(argv[3], O_RDONLY);
-    err(file_fd, "Opening file");
+    std::ifstream readFile;
+    readFile.open(argv[3], std::ios::binary|std::ios::ate);
+    if (readFile.fail()) {
+        _exit("Opening file");
+    }
+    else if (readFile.tellg() > (100*1024*1024)) {
+        _exit("File too big");
+    }
+    // int file_fd = open(argv[3], O_RDONLY);
+    // err(file_fd, "Opening file");
 
 
 
@@ -223,6 +231,7 @@ int main(int argc, char** argv) {
     std::tie(socket_fd, p) = open_socket(OPT_HOST.c_str(), OPT_PORT);
 
     uint32_t seq_num;
+    size_t streampos = 0;
     uint32_t ack_num = 0;
     uint16_t cid = 0;
     int amt_sent = 0;
@@ -238,15 +247,25 @@ int main(int argc, char** argv) {
     socket_timeout.tv_usec = 5000;
     setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
 
-
+    uint64_t retransmit_last_time = time_now_ms();
 
     uint64_t last_active_time = time_now_ms();
     while (truedone == false) {
         uint64_t current_time = time_now_ms();
         uint64_t time_diff = current_time - last_active_time;
+        uint64_t retransmit_time_diff = current_time - retransmit_last_time;
         if (time_diff > 10000) {
             _exit("10 second timeout");
         }
+        else if (retransmit_time_diff > 500) {
+            seq_num = cwnd_q.front();
+            while (!cwnd_q.empty()) {
+                streampos -= paysize_q.front();
+                paysize_q.pop();
+                cwnd_q.pop();
+            }
+        }
+
         packet curr_pack;
         memset(&curr_pack, 0, sizeof(struct packet));
         packet rcv_ack;
@@ -255,14 +274,27 @@ int main(int argc, char** argv) {
         int rc = 0;
         if (amt_sent > 0) {
             rc = recvfrom(socket_fd, &rcv_ack, 12, 0, NULL, 0);
-            _log("RECV returned, ", rc, "done: ", done, "truedone: ", truedone);
+            // _log("RECV returned, ", rc, "done: ", done, "truedone: ", truedone);
             if (rc > 0) {
                 last_active_time = time_now_ms();
-                _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front());
-                if (ntohl(rcv_ack.packet_head.ack_number) == cwnd_q.front()) {
-                    cwnd_q.pop();
-                    amt_sent -= paysize_q.front();
-                    paysize_q.pop();
+                _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front(), "seq num", seq_num);
+                if (rcv_ack.packet_head.flags == ACK && ntohl(rcv_ack.packet_head.ack_number) >= (seq_num%(SPEC_MAX_SEQ + 1)) /*== cwnd_q.front()*/) {
+                    uint32_t curr_ack_num = ntohl(rcv_ack.packet_head.ack_number);
+                    // cwnd_q.pop();
+                    // amt_sent -= paysize_q.front();
+                    // paysize_q.pop();
+                    amt_sent -= curr_ack_num - cwnd_q.front();
+                    if (amt_sent > SPEC_MAX_SEQ) {
+                        amt_sent = SPEC_MAX_SEQ - cwnd_q.front() + curr_ack_num + 1;
+                    }
+                    _log("AMT SENT AFTER ACK = ", amt_sent, " front ", cwnd_q.front(), " ", paysize_q.front());
+                    while (!cwnd_q.empty() && (((cwnd_q.front() + paysize_q.front())%(SPEC_MAX_SEQ + 1)) <= curr_ack_num)) {
+                        _log("cwnd ", cwnd_q.front(), "pays", paysize_q.front());
+                        cwnd_q.pop();
+                        paysize_q.pop();
+                    }
+                    seq_num = curr_ack_num % (SPEC_MAX_SEQ + 1);
+                    retransmit_last_time = time_now_ms();
                 }
                 _log("RCV ACK PACKET:");
                 printpacket(&rcv_ack);
@@ -271,11 +303,15 @@ int main(int argc, char** argv) {
             }
             if (cwnd_q.size() == 0 && done) {
                 truedone = true;
+                break;
             }
         }
 
         if (amt_sent <= cwnd) {
-            int readLen = read(file_fd, curr_pack.payload, SPEC_MAX_PAYLOAD_SIZE);
+            readFile.seekg(streampos);
+            readFile.read(curr_pack.payload, SPEC_MAX_PAYLOAD_SIZE);
+            int readLen = readFile.gcount();
+            streampos += readLen;
             if (readLen < SPEC_MAX_PAYLOAD_SIZE) {
                 done = true;
             }
@@ -292,12 +328,15 @@ int main(int argc, char** argv) {
             _log("SENT payload PACKET:");
             printpacket(&curr_pack);
             output_packet(&curr_pack, cwnd, ssthresh, TYPE_SEND);
+            cwnd_q.push(seq_num);
             seq_num += readLen;
             seq_num %= SPEC_MAX_SEQ + 1;
-            cwnd_q.push(seq_num);
-            _log(seq_num);
+            // cwnd_q.push(seq_num);
+            _log("SEQ NUM = ", seq_num);
+            _log("READLEN = ", readLen);
             paysize_q.push(readLen);
             amt_sent += readLen;
+            _log("AMT SENT = ", amt_sent);
         }
     }
 
