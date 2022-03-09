@@ -153,6 +153,8 @@ int main(int argc, char **argv) {
         uint8_t reply_flag = 0;
         int reply_type = 0;
 
+        uint32_t got_seq = 0;
+
         int packet_from = PACKET_FROM_REC;
         for (auto& [c_id, value] : out_of_order) {
             _log("CHECK ", c_id, ", ", value.size());
@@ -172,12 +174,19 @@ int main(int argc, char **argv) {
             {
                 //
                 incoming_packet = value.begin()->second;
+                cid = ntohs(incoming_packet.packet_head.connection_id);
+                got_seq = ntohl(incoming_packet.packet_head.sequence_number);
+
                 if (value.size() == 1) {
                     packet_from = PACKET_LAST_FROM_BUFFER;
                 } else {
                     packet_from = PACKET_FROM_BUFFER;
                 }
             };
+        }
+
+        if (packet_from == PACKET_FROM_BUFFER || packet_from == PACKET_LAST_FROM_BUFFER) {
+            out_of_order[cid].erase(got_seq);
         }
 
         if (packet_from == PACKET_FROM_REC) {
@@ -274,7 +283,7 @@ int main(int argc, char **argv) {
             std::filesystem::path full_path = dir / new_connection;
 
             // int write_fd = open(full_path.c_str(), O_CREAT | O_WRONLY, S_IRWXU);
-            FILE * write_fd = fopen(full_path.c_str(), "a+");
+            FILE * write_fd = fopen(full_path.c_str(), "w+");
             
             _log("WRITEFD = ", write_fd);
 
