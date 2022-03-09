@@ -94,7 +94,7 @@ std::tuple<int, struct addrinfo*> open_socket(const char* hostname, int port) {
     rc = getaddrinfo(hostname, port_name.c_str(), &hints, &server_info);
     if (rc != 0) {
         _log("SOCKET SETUP: Error getting address info", strerror(errno));
-        _exit("Getting address info, maybe incorrect hostname or port?", errno);
+        _exit("Incorrect hostname or port?", errno);
     }
     _log("SOCKET SETUP: getaddrinfo success.\n");
 
@@ -166,20 +166,6 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     return 0;
 }
 
-int validateHost(char* name) {
-    if (strcmp(name, "localhost") == 0){
-        return 0;
-    }
-    else {
-        for (int i = 0; i < (int)strlen(name); i++) {
-            if (name[i] != '.' && (name[i] < '0' || name[i] > '9')) {
-                return -1;
-            }
-        }
-    }
-    return 0;
-}
-
 int main(int argc, char** argv) {
     // ========================================================================== //
     //     get arguments
@@ -202,7 +188,7 @@ int main(int argc, char** argv) {
         OPT_PORT = std::stoi(argv[2]);
         OPT_DIR  = argv[3];
         if (OPT_PORT < 0 || OPT_PORT > 65535) throw std::invalid_argument("Invalid Port");
-        if (validateHost(argv[1]) == -1) throw std::invalid_argument("Invalid Hostname");
+        // if (validateHost(argv[1]) == -1) throw std::invalid_argument("Invalid Hostname");
     } catch (const std::exception& e) {
         _exit("Invalid arguments.\nusage: \"./client <HOSTNAME-OR-IP> <PORT> <FILE-DIR>\"");
     }
@@ -217,8 +203,6 @@ int main(int argc, char** argv) {
     }
     // int file_fd = open(argv[3], O_RDONLY);
     // err(file_fd, "Opening file");
-
-
 
     // ========================================================================== //
     //     open sockets
