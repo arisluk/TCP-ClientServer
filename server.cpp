@@ -265,6 +265,7 @@ int main(int argc, char **argv) {
                 sprintf(err_msg, "ERROR");
                 // int written = write(database.at(key).writefd, err_msg, sizeof(err_msg));
                 int written = fwrite(err_msg, sizeof(char), sizeof(err_msg), database.at(key).writefd);
+                fflush(database.at(cid).writefd);
                 // total_written += written;
                 _log("write rto= ", written);
                 fclose(database.at(key).writefd);
@@ -324,6 +325,7 @@ int main(int argc, char **argv) {
                 }
                 database.at(cid).seq = (database.at(cid).seq + rc - 12) % (SPEC_MAX_SEQ + 1);
                 int written = fwrite(incoming_packet.payload, sizeof(char), rc-12, database.at(cid).writefd);
+                fflush(database.at(cid).writefd);
                 total_written += written;
                 _log("writte = ", written);
             }
@@ -359,6 +361,7 @@ int main(int argc, char **argv) {
                 database.at(cid).seq = (database.at(cid).seq + rc - 12) % (SPEC_MAX_SEQ + 1);
                 // int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
                 int written = fwrite(incoming_packet.payload, sizeof(char), rc-12, database.at(cid).writefd);
+                fflush(database.at(cid).writefd);
                 total_written += written;
                 _log("write nonack = ", written);
             }
