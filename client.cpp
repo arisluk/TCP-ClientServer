@@ -207,13 +207,6 @@ int main(int argc, char** argv) {
     struct addrinfo* p;
     std::tie(socket_fd, p) = open_socket(OPT_HOST.c_str(), OPT_PORT);
 
-    // make socket non-blocking
-    struct timeval socket_timeout;
-    socket_timeout.tv_sec  = 0;
-    socket_timeout.tv_usec = 5000;
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
-
-
     uint32_t seq_num;
     uint32_t ack_num = 0;
     uint16_t cid = 0;
@@ -224,6 +217,11 @@ int main(int argc, char** argv) {
     // try handshake
     handshake(socket_fd, p->ai_addr, p->ai_addrlen, &seq_num, &ack_num, &cid);
 
+    // make socket non-blocking
+    struct timeval socket_timeout;
+    socket_timeout.tv_sec  = 0;
+    socket_timeout.tv_usec = 5000;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
 
 
     while (truedone == false) {

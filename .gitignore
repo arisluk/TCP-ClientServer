@@ -3,3 +3,7 @@
 .vagrant
 server
 client
+.vscode/settings.json
+*.out
+ref_client
+ref_server

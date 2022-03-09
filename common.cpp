@@ -15,6 +15,12 @@
 //     return copy;
 // }
 
+
+uint64_t time_now_ms() {
+    using namespace std::chrono;
+    return std::chrono::duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
 bool err(int rc, const char* message, int exit_code) {
     if (rc < 0) {
         if (message)
@@ -57,13 +63,13 @@ void output_packet(struct packet* pack, int cwnd, int ss_thresh, int type) {
         std::cout << ntohl(pack->packet_head.ack_number) << " ";
         std::cout << ntohs(pack->packet_head.connection_id) << " ";
         std::cout << cwnd << " ";
-        std::cout << ss_thresh << " ";
+        std::cout << ss_thresh;
 
-        if (pack->packet_head.flags == ACK) std::cout << "ACK";
-        if (pack->packet_head.flags == SYN) std::cout << "SYN";
-        if (pack->packet_head.flags == FIN) std::cout << "FIN";
-        if (pack->packet_head.flags == SYNACK) std::cout << "ACK SYN";
-        if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
+        if (pack->packet_head.flags == ACK) std::cout << " ACK";
+        if (pack->packet_head.flags == SYN) std::cout << " SYN";
+        if (pack->packet_head.flags == FIN) std::cout << " FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << " ACK SYN";
+        if (pack->packet_head.flags == FINACK) std::cout << " ACK FIN";
         std::cout << std::endl;
     } else if (type == 2) {
         // "SEND" <Sequence Number> <Acknowledgement Number> <Connection ID> <CWND> <SS-THRESH> ["ACK"] ["SYN"] ["FIN"] ["DUP"]
@@ -72,13 +78,13 @@ void output_packet(struct packet* pack, int cwnd, int ss_thresh, int type) {
         std::cout << ntohl(pack->packet_head.ack_number) << " ";
         std::cout << ntohs(pack->packet_head.connection_id) << " ";
         std::cout << cwnd << " ";
-        std::cout << ss_thresh << " ";
+        std::cout << ss_thresh;
 
-        if (pack->packet_head.flags == ACK) std::cout << "ACK";
-        if (pack->packet_head.flags == SYN) std::cout << "SYN";
-        if (pack->packet_head.flags == FIN) std::cout << "FIN";
-        if (pack->packet_head.flags == SYNACK) std::cout << "ACK SYN";
-        if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
+        if (pack->packet_head.flags == ACK) std::cout << " ACK";
+        if (pack->packet_head.flags == SYN) std::cout << " SYN";
+        if (pack->packet_head.flags == FIN) std::cout << " FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << " ACK SYN";
+        if (pack->packet_head.flags == FINACK) std::cout << " ACK FIN";
         std::cout << std::endl;
     } else if (type == 3) {
         std::cout << "SEND ";
@@ -86,13 +92,13 @@ void output_packet(struct packet* pack, int cwnd, int ss_thresh, int type) {
         std::cout << ntohl(pack->packet_head.ack_number) << " ";
         std::cout << ntohs(pack->packet_head.connection_id) << " ";
         std::cout << cwnd << " ";
-        std::cout << ss_thresh << " ";
-        if (pack->packet_head.flags == ACK) std::cout << "ACK ";
-        if (pack->packet_head.flags == SYN) std::cout << "SYN ";
-        if (pack->packet_head.flags == FIN) std::cout << "FIN ";
-        if (pack->packet_head.flags == SYNACK) std::cout << "ACK SYN";
-        if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
-        std::cout << "DUP";
+        std::cout << ss_thresh;
+        if (pack->packet_head.flags == ACK) std::cout << " ACK";
+        if (pack->packet_head.flags == SYN) std::cout << " SYN";
+        if (pack->packet_head.flags == FIN) std::cout << " FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << " ACK SYN";
+        if (pack->packet_head.flags == FINACK) std::cout << " ACK FIN";
+        std::cout << " DUP";
         std::cout << std::endl;
     } else if (type == 4) {
         // "DROP" <Sequence Number> <Acknowledgement Number> <Connection ID> ["ACK"] ["SYN"] ["FIN"]
@@ -116,53 +122,53 @@ void output_packet_server(struct packet* pack, int type) {
         std::cout << "RECV ";
         std::cout << ntohl(pack->packet_head.sequence_number) << " ";
         std::cout << ntohl(pack->packet_head.ack_number) << " ";
-        std::cout << ntohs(pack->packet_head.connection_id) << " ";
+        std::cout << ntohs(pack->packet_head.connection_id);
 
-        if (pack->packet_head.flags == ACK) std::cout << "ACK";
-        if (pack->packet_head.flags == SYN) std::cout << "SYN";
-        if (pack->packet_head.flags == FIN) std::cout << "FIN";
-        if (pack->packet_head.flags == SYNACK) std::cout << "ACK SYN";
-        if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
+        if (pack->packet_head.flags == ACK) std::cout << " ACK";
+        if (pack->packet_head.flags == SYN) std::cout << " SYN";
+        if (pack->packet_head.flags == FIN) std::cout << " FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << " ACK SYN";
+        if (pack->packet_head.flags == FINACK) std::cout << " ACK FIN";
         std::cout << std::endl;
     } else if (type == TYPE_SEND) {
         // "SEND" <Sequence Number> <Acknowledgement Number> <Connection ID> ["ACK"] ["SYN"] ["FIN"] ["DUP"]
         std::cout << "SEND ";
         std::cout << ntohl(pack->packet_head.sequence_number) << " ";
         std::cout << ntohl(pack->packet_head.ack_number) << " ";
-        std::cout << ntohs(pack->packet_head.connection_id) << " ";
+        std::cout << ntohs(pack->packet_head.connection_id);
 
-        if (pack->packet_head.flags == ACK) std::cout << "ACK";
-        if (pack->packet_head.flags == SYN) std::cout << "SYN";
-        if (pack->packet_head.flags == FIN) std::cout << "FIN";
-        if (pack->packet_head.flags == SYNACK) std::cout << "ACK SYN";
-        if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
+        if (pack->packet_head.flags == ACK) std::cout << " ACK";
+        if (pack->packet_head.flags == SYN) std::cout << " SYN";
+        if (pack->packet_head.flags == FIN) std::cout << " FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << " ACK SYN";
+        if (pack->packet_head.flags == FINACK) std::cout << " ACK FIN";
         std::cout << std::endl;
     } else if (type == TYPE_DUP) {
         // "SEND" <Sequence Number> <Acknowledgement Number> <Connection ID> ["ACK"] ["SYN"] ["FIN"] ["DUP"]
         std::cout << "SEND ";
         std::cout << ntohl(pack->packet_head.sequence_number) << " ";
         std::cout << ntohl(pack->packet_head.ack_number) << " ";
-        std::cout << ntohs(pack->packet_head.connection_id) << " ";
+        std::cout << ntohs(pack->packet_head.connection_id);
 
-        if (pack->packet_head.flags == ACK) std::cout << "ACK ";
-        if (pack->packet_head.flags == SYN) std::cout << "SYN ";
-        if (pack->packet_head.flags == FIN) std::cout << "FIN ";
-        if (pack->packet_head.flags == SYNACK) std::cout << "ACK SYN";
-        if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
-        std::cout << "DUP";
+        if (pack->packet_head.flags == ACK) std::cout << " ACK";
+        if (pack->packet_head.flags == SYN) std::cout << " SYN";
+        if (pack->packet_head.flags == FIN) std::cout << " FIN";
+        if (pack->packet_head.flags == SYNACK) std::cout << " ACK SYN";
+        if (pack->packet_head.flags == FINACK) std::cout << " ACK FIN";
+        std::cout << " DUP";
         std::cout << std::endl;
     } else if (type == TYPE_DROP) {
         // "DROP" <Sequence Number> <Acknowledgement Number> <Connection ID> ["ACK"] ["SYN"] ["FIN"]
         std::cout << "DROP ";
         std::cout << ntohl(pack->packet_head.sequence_number) << " ";
         std::cout << ntohl(pack->packet_head.ack_number) << " ";
-        std::cout << ntohs(pack->packet_head.connection_id) << " ";
+        std::cout << ntohs(pack->packet_head.connection_id);
 
-        if (pack->packet_head.flags == ACK) std::cout << "ACK ";
-        if (pack->packet_head.flags == SYN) std::cout << "SYN ";
-        if (pack->packet_head.flags == FIN) std::cout << "FIN ";
-        if (pack->packet_head.flags == SYNACK) std::cout << "ACK SYN";
-        if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
+        if (pack->packet_head.flags == ACK) std::cout << " ACK ";
+        if (pack->packet_head.flags == SYN) std::cout << " SYN ";
+        if (pack->packet_head.flags == FIN) std::cout << " FIN ";
+        if (pack->packet_head.flags == SYNACK) std::cout << " ACK SYN";
+        if (pack->packet_head.flags == FINACK) std::cout << " ACK FIN";
         std::cout << std::endl;
     }
 }

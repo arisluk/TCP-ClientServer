@@ -8,6 +8,8 @@
 
 #include <cerrno>
 #include <cstring>
+
+#include <chrono>
 #include <iostream>
 
 #ifdef DEBUG
@@ -73,6 +75,8 @@ void printpacket(struct packet*);
 void output_packet(struct packet*, int cwnd, int ss_thresh, int type);
 
 void output_packet_server(struct packet*, int type);
+
+uint64_t time_now_ms();
 
 // set header flags given ACK, SYN, FIN
 // uint8_t set_flags(uint8_t& flag, bool ACK, bool SYN, bool FIN);
