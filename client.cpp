@@ -356,6 +356,10 @@ int main(int argc, char** argv) {
             printpacket(&newack);
             output_packet(&newack, cwnd, ssthresh, TYPE_SEND);
         }
+        else if (newrc > 0) {
+            printpacket(&leftover_fin);
+            output_packet(&leftover_fin, cwnd, ssthresh, TYPE_DROP);
+        }
     }
 
     shutdown(socket_fd, 2);

@@ -94,6 +94,19 @@ void output_packet(struct packet* pack, int cwnd, int ss_thresh, int type) {
         if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
         std::cout << "DUP";
         std::cout << std::endl;
+    } else if (type == 4) {
+        // "DROP" <Sequence Number> <Acknowledgement Number> <Connection ID> ["ACK"] ["SYN"] ["FIN"]
+        std::cout << "DROP ";
+        std::cout << ntohl(pack->packet_head.sequence_number) << " ";
+        std::cout << ntohl(pack->packet_head.ack_number) << " ";
+        std::cout << ntohs(pack->packet_head.connection_id) << " ";
+
+        if (pack->packet_head.flags == ACK) std::cout << "ACK ";
+        if (pack->packet_head.flags == SYN) std::cout << "SYN ";
+        if (pack->packet_head.flags == FIN) std::cout << "FIN ";
+        if (pack->packet_head.flags == SYNACK) std::cout << "ACK SYN";
+        if (pack->packet_head.flags == FINACK) std::cout << "ACK FIN";
+        std::cout << std::endl;
     }
 }
 
