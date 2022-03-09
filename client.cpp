@@ -331,6 +331,20 @@ int main(int argc, char** argv) {
     printpacket(&finack);
     output_packet(&finack, cwnd, ssthresh, TYPE_RECV);
 
+    packet finalack;
+    memset(&finalack, 0, sizeof(struct packet));
+    finalack.packet_head.flags           = ACK;
+    finalack.packet_head.connection_id   = finack.packet_head.connection_id;
+    finalack.packet_head.sequence_number = finack.packet_head.ack_number;
+    finalack.packet_head.ack_number      = htonl(ntohl(finack.packet_head.sequence_number) + 1);
+
+    numbytes     = sendto(socket_fd, &finalack, 12, 0, p->ai_addr, p->ai_addrlen);
+    err(numbytes, "Sending final ACK");
+    _log("final ACK talker: sent ", numbytes, " bytes");
+    _log("SENT final ACK PACKET:");
+    printpacket(&finalack);
+    output_packet(&finalack, cwnd, ssthresh, TYPE_SEND);
+
     packet leftover_fin;
     memset(&leftover_fin, 0, sizeof(struct packet));
 
