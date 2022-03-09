@@ -166,6 +166,19 @@ int handshake(int socket_fd, struct sockaddr* addr, socklen_t size, uint32_t* se
     return 0;
 }
 
+int validateHost(char* name) {
+    if (strcmp(name, "localhost") == 0){
+        return 0;
+    }
+    else {
+        for (int i = 0; i < strlen(name); i++) {
+            if (name[i] != '.' && (name[i] < '0' || name[i] > '9')) {
+                return -1;
+            }
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     // ========================================================================== //
     //     get arguments
@@ -188,6 +201,7 @@ int main(int argc, char** argv) {
         OPT_PORT = std::stoi(argv[2]);
         OPT_DIR  = argv[3];
         if (OPT_PORT < 0 || OPT_PORT > 65535) throw std::invalid_argument("Invalid Port");
+        if (validateHost(OPT_HOST.c_str()) == -1) throw std::invalid_argument("Invalid Hostname");
     } catch (const std::exception& e) {
         _exit("Invalid arguments.\nusage: \"./client <HOSTNAME-OR-IP> <PORT> <FILE-DIR>\"");
     }
