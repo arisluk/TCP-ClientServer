@@ -89,12 +89,13 @@ void _exit(const char* message, int exit_code = 1);
 
 // log if built with "make debug" instead of plain "make server" or "make client"
 template <typename... Args>
-void _log(Args&&... args) {
-    if (OPT_LOG) {
-        std::cerr << "DEBUG: ";
-        (std::cerr << ... << args);
-        std::cerr << std::endl;
-    }
+inline void _log(Args&&... args) {
+    #ifdef DEBUG
+    std::cerr << "DEBUG: ";
+    (std::cerr << ... << args);
+    std::cerr << std::endl;
+    #endif
+    return;
 }
 
 class Store {
