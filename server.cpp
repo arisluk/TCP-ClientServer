@@ -14,6 +14,7 @@
 #include <vector>
 #include <dirent.h>
 #include <map>
+#include <stdio.h>
 
 // C libraries
 #include <cerrno>
@@ -41,6 +42,8 @@ using namespace std;
 std::map<unsigned int, Store> database;
 
 std::map<uint16_t, std::map<int32_t, packet>> out_of_order;
+
+uint64_t total_written = 0;
 
 // ========================================================================== //
 // FUNCTIONS
@@ -142,15 +145,28 @@ int main(int argc, char **argv) {
         uint16_t cid;
         uint8_t incoming_flag;
 
+        
+        bool reply_needed = false;
+        uint32_t reply_seq = 0;
+        uint32_t reply_ack = 0;
+        uint16_t reply_cid = 0;
+        uint8_t reply_flag = 0;
+        int reply_type = 0;
+
         int packet_from = PACKET_FROM_REC;
         for (auto& [c_id, value] : out_of_order) {
+            _log("CHECK ", c_id, ", ", value.size());
+            if (value.size() == 0) continue;
+
             uint32_t smallest_seq = value.begin()->first;
             while (smallest_seq < database.at(c_id).seq)
             {
+                if (value.size() == 0) break;
                 value.erase(smallest_seq);
                 smallest_seq = value.begin()->first;
             }
             
+            if (value.size() == 0) continue;
             smallest_seq = value.begin()->first;
             if (smallest_seq == database.at(c_id).seq)
             {
@@ -169,7 +185,7 @@ int main(int argc, char **argv) {
             rc = recvfrom(socket_fd, &incoming_packet, sizeof(struct packet), 0, (struct sockaddr *)&client_addr, (socklen_t*)&addr_len);
             err(rc, "SERVER: while recvfrom socket (server)");
             _log("RECV: Successfully got datagram, length ", rc);
-            _log("RECEIVED PACKET, at time:" , time_now_ms());
+            _log("RECEIVED PACKET");
             
             incoming_seq = ntohl(incoming_packet.packet_head.sequence_number);
             incoming_ack = ntohl(incoming_packet.packet_head.ack_number);
@@ -178,12 +194,33 @@ int main(int argc, char **argv) {
 
             if (incoming_flag != SYN && incoming_seq < database.at(cid).seq) {
                 output_packet_server(&incoming_packet, TYPE_DROP);
+                
+                if (database.count(cid) > 0) {
+                    reply_seq =  database.at(cid).ack;
+                    reply_ack = database.at(cid).seq;
+                    reply_cid = cid;
+                    reply_flag = ACK;
+                    reply_type = TYPE_DUP;
+
+                    packet reply;
+                    memset(&reply, 0, sizeof(struct packet));
+                    reply.packet_head.sequence_number = htonl(reply_seq);
+                    reply.packet_head.ack_number = htonl(reply_ack);
+                    reply.packet_head.connection_id = htons(reply_cid);
+                    reply.packet_head.flags = reply_flag;
+
+                    int numbytes = 0;
+                    numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, addr_len);
+                    _log("current expected: ", database.at(cid).seq);
+                    err(numbytes, "Sending response");
+                    output_packet_server(&reply, reply_type);    
+                }
+                
                 continue;
             }
 
             printpacket(&incoming_packet);
             output_packet_server(&incoming_packet, TYPE_RECV);
-
         } else if (packet_from == PACKET_FROM_BUFFER || packet_from == PACKET_LAST_FROM_BUFFER) {
             incoming_seq = ntohl(incoming_packet.packet_head.sequence_number);
             incoming_ack = ntohl(incoming_packet.packet_head.ack_number);
@@ -206,25 +243,20 @@ int main(int argc, char **argv) {
         if (incoming_flag > 7) _exit("Incorrect flags");
 
 
-        bool reply_needed = false;
-        uint32_t reply_seq = 0;
-        uint32_t reply_ack = 0;
-        uint16_t reply_cid = 0;
-        uint8_t reply_flag = 0;
-        int reply_type = 0;
-
         // Check timing for RTO
         for (auto const& [key, val] : database)
         {
             uint64_t time_diff = time_now - val.last_time;
-            _log(key, " time diff = ", time_diff / 10);
+            // _log(key, " time diff = ", time_diff / 10);
             if (time_now > val.last_time && time_diff > 10000) {
                 database.at(key).state = STATE_FIN;
                 char err_msg[50];
-                sprintf(err_msg, "ERROR%ld, %ld", key, time_diff);
-                int written = write(database.at(key).writefd, err_msg, sizeof(err_msg));
-                _log("writte = ", written);
-                close(database.at(key).writefd);
+                sprintf(err_msg, "ERROR");
+                // int written = write(database.at(key).writefd, err_msg, sizeof(err_msg));
+                int written = fwrite(err_msg, sizeof(char), sizeof(err_msg), database.at(key).writefd);
+                // total_written += written;
+                _log("write rto= ", written);
+                fclose(database.at(key).writefd);
                 database.erase(key);
                 out_of_order.erase(key);
             }
@@ -241,11 +273,10 @@ int main(int argc, char **argv) {
             std::filesystem::path new_connection(filename);
             std::filesystem::path full_path = dir / new_connection;
 
-            int write_fd = open(full_path.c_str(), O_CREAT | O_WRONLY, S_IRWXU);
-            err(write_fd, "opening path");
+            // int write_fd = open(full_path.c_str(), O_CREAT | O_WRONLY, S_IRWXU);
+            FILE * write_fd = fopen(full_path.c_str(), "a+");
             
             _log("WRITEFD = ", write_fd);
-            
 
             reply_needed = true;
             reply_seq = 4321;
@@ -258,7 +289,8 @@ int main(int argc, char **argv) {
             database[num_connections] = temp;
         } else if (incoming_flag == FIN) {
             database.at(cid).state = STATE_FIN;
-            close(database.at(cid).writefd);
+            fflush(database[cid].writefd);
+            fclose(database.at(cid).writefd);
 
             reply_needed = true;
             reply_seq = database.at(cid).ack;
@@ -268,15 +300,20 @@ int main(int argc, char **argv) {
             reply_type = TYPE_SEND;
         }
         else if (incoming_flag == ACK) {
-            if (incoming_seq != database.at(cid).seq) {
+            if (incoming_seq > database.at(cid).seq) {
                 database.at(cid).seq = database.at(cid).seq;
                 if (packet_from == PACKET_FROM_REC) {
+                    _log("=STORED=========================================");
                     packet copy = incoming_packet;
                     out_of_order[cid][incoming_seq] = copy;
                 }
             } else {
-                database.at(cid).seq = (incoming_seq + rc - 12) % (SPEC_MAX_SEQ + 1);
-                int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
+                if (packet_from == PACKET_FROM_BUFFER) {
+                    _log("=OUT=========================================");
+                }
+                database.at(cid).seq = (database.at(cid).seq + rc - 12) % (SPEC_MAX_SEQ + 1);
+                int written = fwrite(incoming_packet.payload, sizeof(char), rc-12, database.at(cid).writefd);
+                total_written += written;
                 _log("writte = ", written);
             }
             database.at(cid).ack = incoming_ack;
@@ -292,19 +329,27 @@ int main(int argc, char **argv) {
                 reply_needed = false;
                 database.erase(cid);
                 out_of_order.erase(cid);
+                _log("total written, ", total_written);
+                total_written = 0;
             }
         }
         else {
-            if (incoming_seq != database.at(cid).seq) {
+            if (incoming_seq > database.at(cid).seq) {
                 database.at(cid).seq = database.at(cid).seq;
                 if (packet_from == PACKET_FROM_REC) {
+                    _log("=STORED=========================================");
                     packet copy = incoming_packet;
                     out_of_order[cid][incoming_seq] = copy;
                 }
             } else {
-                database.at(cid).seq = (incoming_seq + rc - 12) % (SPEC_MAX_SEQ + 1);
-                int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
-                _log("writte = ", written);
+                if (packet_from == PACKET_FROM_BUFFER) {
+                    _log("==========================================");
+                }
+                database.at(cid).seq = (database.at(cid).seq + rc - 12) % (SPEC_MAX_SEQ + 1);
+                // int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
+                int written = fwrite(incoming_packet.payload, sizeof(char), rc-12, database.at(cid).writefd);
+                total_written += written;
+                _log("write nonack = ", written);
             }
             database.at(cid).last_time = time_now_ms();
 
@@ -326,14 +371,12 @@ int main(int argc, char **argv) {
 
             int numbytes = 0;
             numbytes     = sendto(socket_fd, &reply, 12, 0, (struct sockaddr *)&client_addr, addr_len);
-            _log(&client_addr, addr_len);
             err(numbytes, "Sending response");
             _log("talker: sent ", numbytes, " bytes");
             _log("SENT PACKET:");
-            printpacket(&reply);
+            // printpacket(&reply);
             output_packet_server(&reply, reply_type);    
         }
-
     }
 
     shutdown(socket_fd, 2);

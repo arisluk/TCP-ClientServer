@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
+#include <stdio.h>
 
 #include <cerrno>
 #include <cstring>
@@ -105,11 +106,11 @@ inline void _log(Args&&... args) {
 class Store {
     public:
         Store();    
-        Store(uint32_t seq, uint32_t ack, uint64_t last_time, int writefd, int state);
+        Store(uint32_t seq, uint32_t ack, uint64_t last_time, FILE * writefd, int state);
         uint32_t seq; // what we are expecting, latest in-order seq + 512
         uint32_t ack; // last packet by us that client ACKed
         uint64_t last_time;
-        int writefd;
+        FILE * writefd;
         int state;
 };
 
