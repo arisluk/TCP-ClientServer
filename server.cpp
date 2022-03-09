@@ -14,6 +14,7 @@
 #include <vector>
 #include <dirent.h>
 #include <map>
+#include <stdio.h>
 
 // C libraries
 #include <cerrno>
@@ -251,10 +252,11 @@ int main(int argc, char **argv) {
                 database.at(key).state = STATE_FIN;
                 char err_msg[50];
                 sprintf(err_msg, "ERROR");
-                int written = write(database.at(key).writefd, err_msg, sizeof(err_msg));
-                total_written += written;
+                // int written = write(database.at(key).writefd, err_msg, sizeof(err_msg));
+                int written = fwrite(err_msg, sizeof(char), sizeof(err_msg), database.at(key).writefd);
+                // total_written += written;
                 _log("write rto= ", written);
-                close(database.at(key).writefd);
+                fclose(database.at(key).writefd);
                 database.erase(key);
                 out_of_order.erase(key);
             }
@@ -271,8 +273,8 @@ int main(int argc, char **argv) {
             std::filesystem::path new_connection(filename);
             std::filesystem::path full_path = dir / new_connection;
 
-            int write_fd = open(full_path.c_str(), O_CREAT | O_WRONLY, S_IRWXU);
-            err(write_fd, "opening path");
+            // int write_fd = open(full_path.c_str(), O_CREAT | O_WRONLY, S_IRWXU);
+            FILE * write_fd = fopen(full_path.c_str(), "a+");
             
             _log("WRITEFD = ", write_fd);
 
@@ -287,8 +289,8 @@ int main(int argc, char **argv) {
             database[num_connections] = temp;
         } else if (incoming_flag == FIN) {
             database.at(cid).state = STATE_FIN;
-            fsync(database[cid].writefd);
-            close(database.at(cid).writefd);
+            fflush(database[cid].writefd);
+            fclose(database.at(cid).writefd);
 
             reply_needed = true;
             reply_seq = database.at(cid).ack;
@@ -310,7 +312,7 @@ int main(int argc, char **argv) {
                     _log("=OUT=========================================");
                 }
                 database.at(cid).seq = (database.at(cid).seq + rc - 12) % (SPEC_MAX_SEQ + 1);
-                int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
+                int written = fwrite(incoming_packet.payload, sizeof(char), rc-12, database.at(cid).writefd);
                 total_written += written;
                 _log("writte = ", written);
             }
@@ -344,9 +346,10 @@ int main(int argc, char **argv) {
                     _log("==========================================");
                 }
                 database.at(cid).seq = (database.at(cid).seq + rc - 12) % (SPEC_MAX_SEQ + 1);
-                int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
+                // int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
+                int written = fwrite(incoming_packet.payload, sizeof(char), rc-12, database.at(cid).writefd);
                 total_written += written;
-                _log("writte = ", written);
+                _log("write nonack = ", written);
             }
             database.at(cid).last_time = time_now_ms();
 

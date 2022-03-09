@@ -181,7 +181,7 @@ Store::Store() {
     state = 0;
 }
 
-Store::Store(uint32_t sq, uint32_t ak, uint64_t lte, int wfd, int s) {
+Store::Store(uint32_t sq, uint32_t ak, uint64_t lte, FILE * wfd, int s) {
     seq = sq;
     ack = ak;
     last_time = lte;
