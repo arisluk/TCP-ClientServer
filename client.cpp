@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
     std::tie(socket_fd, p) = open_socket(OPT_HOST.c_str(), OPT_PORT);
 
     uint32_t seq_num;
-    size_t streampos = 0;
+    std::streampos streamposition = 0;
     uint32_t ack_num = 0;
     uint16_t cid = 0;
     int amt_sent = 0;
@@ -244,10 +244,11 @@ int main(int argc, char** argv) {
         else if (retransmit_time_diff > 500) {
             seq_num = cwnd_q.front();
             while (!cwnd_q.empty()) {
-                streampos -= paysize_q.front();
+                streamposition -= paysize_q.front();
                 paysize_q.pop();
                 cwnd_q.pop();
             }
+            on_timeout();
         }
 
         packet curr_pack;
@@ -262,7 +263,7 @@ int main(int argc, char** argv) {
             if (rc > 0) {
                 last_active_time = time_now_ms();
                 _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front(), "seq num", seq_num);
-                if (rcv_ack.packet_head.flags == ACK && ntohl(rcv_ack.packet_head.ack_number) >= (seq_num%(SPEC_MAX_SEQ + 1)) /*== cwnd_q.front()*/) {
+                if (rcv_ack.packet_head.flags == ACK && (ntohl(rcv_ack.packet_head.ack_number) >= (seq_num%(SPEC_MAX_SEQ + 1)) || ntohl(rcv_ack.packet_head.ack_number) <= 511)) /*== cwnd_q.front()*/ {
                     uint32_t curr_ack_num = ntohl(rcv_ack.packet_head.ack_number);
                     // cwnd_q.pop();
                     // amt_sent -= paysize_q.front();
@@ -280,10 +281,12 @@ int main(int argc, char** argv) {
                     seq_num = curr_ack_num % (SPEC_MAX_SEQ + 1);
                     retransmit_last_time = time_now_ms();
                 }
-                _log("RCV ACK PACKET:");
-                printpacket(&rcv_ack);
-                output_packet(&rcv_ack, cwnd, ssthresh, TYPE_RECV);
-                update_cwnd_ssthresh();
+                if (ntohl(rcv_ack.packet_head.ack_number) >= ((cwnd_q.front()+paysize_q.front())%(SPEC_MAX_SEQ + 1))) {
+                    _log("RCV ACK PACKET:");
+                    printpacket(&rcv_ack);
+                    output_packet(&rcv_ack, cwnd, ssthresh, TYPE_RECV);
+                    update_cwnd_ssthresh();
+                }
             }
             if (cwnd_q.size() == 0 && done) {
                 truedone = true;
@@ -292,10 +295,10 @@ int main(int argc, char** argv) {
         }
 
         if (amt_sent <= cwnd) {
-            readFile.seekg(streampos);
+            readFile.seekg(streamposition);
             readFile.read(curr_pack.payload, SPEC_MAX_PAYLOAD_SIZE);
             int readLen = readFile.gcount();
-            streampos += readLen;
+            streamposition += readLen;
             if (readLen < SPEC_MAX_PAYLOAD_SIZE) {
                 done = true;
             }
