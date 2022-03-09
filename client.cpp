@@ -224,7 +224,14 @@ int main(int argc, char** argv) {
     setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
 
 
+
+    uint64_t last_active_time = time_now_ms();
     while (truedone == false) {
+        uint64_t current_time = time_now_ms();
+        uint64_t time_diff = current_time - last_active_time;
+        if (time_diff > 10000) {
+            _exit("10 second timeout");
+        }
         packet curr_pack;
         memset(&curr_pack, 0, sizeof(struct packet));
         packet rcv_ack;
@@ -235,6 +242,7 @@ int main(int argc, char** argv) {
             rc = recvfrom(socket_fd, &rcv_ack, 12, 0, NULL, 0);
             _log("RECV returned, ", rc, "done: ", done, "truedone: ", truedone);
             if (rc > 0) {
+                last_active_time = time_now_ms();
                 _log("ACK FROM PACK = ", ntohl(rcv_ack.packet_head.ack_number), " front ", cwnd_q.front());
                 if (ntohl(rcv_ack.packet_head.ack_number) == cwnd_q.front()) {
                     cwnd_q.pop();
