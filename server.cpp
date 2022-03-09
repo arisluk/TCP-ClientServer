@@ -97,11 +97,6 @@ int open_socket(int port, int* addrlen) {
     return socket_fd;
 }
 
-uint64_t time_now_ms() {
-    using namespace std::chrono;
-    return std::chrono::duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-}
-
 int main(int argc, char **argv) {
     int OPT_PORT = 0;
     std::string OPT_DIR;
@@ -167,10 +162,24 @@ int main(int argc, char **argv) {
         uint8_t reply_flag = incoming_packet.packet_head.flags;
         int reply_type = 0;
 
+        // Check timing for RTO
+        for (auto const& [key, val] : database)
+        {
+            uint64_t time_diff = time_now - val.last_time;
+            if (time_diff > 10000) {
+                database.at(key).state = STATE_FIN;
+                const char err_msg[] = "ERROR";
+                int written = write(database.at(key).writefd, err_msg, sizeof(err_msg));
+                _log("writte = ", written);
+                close(database.at(key).writefd);
+            }
+        }
+
 
         // new connection (incoming SYN)
         if (incoming_flag == SYN) {
             num_connections++;
+            num_connections %= 11;
             
             char filename[50];
             snprintf(filename, 49, "%d.file", num_connections);
@@ -182,6 +191,7 @@ int main(int argc, char **argv) {
             
             _log("WRITEFD = ", write_fd);
             
+
             reply_needed = true;
             reply_seq = 4321;
             reply_ack = incoming_seq + 1;
@@ -189,10 +199,9 @@ int main(int argc, char **argv) {
             reply_flag = SYNACK;
             reply_type = TYPE_SEND;
 
-            Store temp(reply_seq, 0, time_now_ms(), write_fd, STATE_ACTIVE);
+            Store temp(reply_ack, 0, time_now_ms(), write_fd, STATE_ACTIVE);
             database[num_connections] = temp;
-        } else if (incoming_packet.packet_head.flags == FIN) {
-            database.at(cid).last_time = time_now_ms();
+        } else if (incoming_flag == FIN) {
             database.at(cid).state = STATE_FIN;
             close(database.at(cid).writefd);
 
@@ -203,13 +212,16 @@ int main(int argc, char **argv) {
             reply_flag = FINACK;
             reply_type = TYPE_SEND;
         }
-        else if (incoming_packet.packet_head.flags == ACK) {
-            database.at(cid).seq = (incoming_seq + rc - 12) % (SPEC_MAX_SEQ + 1);
+        else if (incoming_flag == ACK) {
+            if (incoming_seq != database.at(cid).seq) {
+                database.at(cid).seq = database.at(cid).seq;
+            } else {
+                database.at(cid).seq = (incoming_seq + rc - 12) % (SPEC_MAX_SEQ + 1);
+                int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
+                _log("writte = ", written);
+            }
             database.at(cid).ack = incoming_ack;
             database.at(cid).last_time = time_now_ms();
-
-            int written = write(database.at(cid).writefd, incoming_packet.payload, rc-12);
-            _log("writte = ", written);
 
             reply_needed = true;
             reply_seq = incoming_ack;
@@ -217,8 +229,6 @@ int main(int argc, char **argv) {
             reply_cid = cid;
             reply_flag = ACK;
             reply_type = TYPE_SEND;
-
-            
             if (database.at(cid).state == STATE_FIN) reply_needed = false;
         }
         else {
